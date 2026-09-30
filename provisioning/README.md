@@ -3,7 +3,7 @@
 
 Takes a **finalized plan** (`FinalizedPlan`) as input and generates PQC migration artifacts — config fragments, Ansible playbooks (**you choose how far they go** — L1 stages the module, L2 adds the config, L3 activates and restarts; **both apply and rollback**), and the basis for undoing (before capture, rollback records).
 
-What to change and how to undo it is **decided deterministically by the generator**; running the resulting playbook is done by the user's own Ansible. The plan is **written by the user** → [samples and fields](https://github.com/randyinthedev-hash/pqcota/blob/main/examples/provisioning/plans/README.md).
+What to change and how to undo it is **decided deterministically by the generator**; running the resulting playbook is done by the user's own Ansible. The plan is **written by the user** → [samples and fields](../examples/provisioning/plans/README.md).
 
 > **Scope** — two runtimes: **openssl** and **jca**. Anything else produces no artifact and says so (`# (unknown runtime)`). The output assumes POSIX file placement (staging plus Ansible `copy`/`absent`), so **the nodes are Linux**. CNG provisioning is [planned for v0.10.0](https://github.com/randyinthedev-hash/pqcota/blob/main/RELEASE_NOTES.md#roadmap--upcoming-releases-planned).
 
@@ -46,7 +46,7 @@ flowchart TD
 
 | Piece | What it is |
 |---|---|
-| **Input** — the finalized plan | JSON stating which node's what is to be changed to which provider. The user writes it → [samples and fields](https://github.com/randyinthedev-hash/pqcota/blob/main/examples/provisioning/plans/README.md) |
+| **Input** — the finalized plan | JSON stating which node's what is to be changed to which provider. The user writes it → [samples and fields](../examples/provisioning/plans/README.md) |
 | **Generator** — `pqcota-provision` | reads the plan and produces config fragments and Ansible playbooks |
 | **Output** — playbooks | one to apply, one to undo. Standard Ansible, so you run them with your own tooling |
 | **Basis** — rollback records | given `--dsn`, the state *before* the remediation is recorded append-only → [`pqcota-records`](cmd/README.md) |
@@ -114,5 +114,5 @@ The activation and restart commands come from the plan's `activation` hook. With
 
 ## See also
 
-- Minimal runnable examples: [examples/provisioning](https://github.com/randyinthedev-hash/pqcota/tree/main/examples/provisioning)
+- Minimal runnable examples: [examples/provisioning](../examples/provisioning)
 - End-to-end demo: [demo](https://github.com/randyinthedev-hash/pqcota/tree/main/demo)

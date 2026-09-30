@@ -1,0 +1,25 @@
+{
+  "id": "ex-l3-activation-hooks",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-0",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "app-01",
+    "findingId": "f-jca-no-pqc",
+    "cryptoRuntime": "CRYPTO_RUNTIME_JCA",
+    "kind": "REMEDIATION_KIND_PROVIDER_INJECT",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L3_FULL_AUTO",
+    "targetAlgorithm": "ML-KEM (FIPS 203)",
+    "providerChoice": "BC",
+    "providerClass": "org.bouncycastle.jce.provider.BouncyCastleProvider",
+    "rollbackNote": "드롭인 제거 + java.security 조각 제거 + 재시작",
+    "activation": {
+      "pre": "systemctl stop payments.service",
+      "activate": "# JAR '배치'만으로는 provider가 로드되지 않는다 — 앱이 그것을 classpath에서 보게 만든다.\n# 변수명·경로는 환경마다 다르다. 여기 것을 당신 앱의 기동 방식으로 바꿔 적는다.\nmkdir -p /etc/systemd/system/payments.service.d\nprintf '[Service]\\nEnvironment=PAYMENTS_EXTRA_CLASSPATH=/opt/pqcota/BC.jar\\n' > /etc/systemd/system/payments.service.d/pqcota.conf\nsystemctl daemon-reload",
+      "deactivate": "rm -f /etc/systemd/system/payments.service.d/pqcota.conf\nsystemctl daemon-reload",
+      "restart": "systemctl start payments.service"
+    }
+  }]
+}

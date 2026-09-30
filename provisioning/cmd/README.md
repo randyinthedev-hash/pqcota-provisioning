@@ -32,7 +32,7 @@ pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] <plan.json>
 
 To skip approval verification, you have to **write `--allow-unverified-approvals` on the command line, and there is no other means.** If an environment variable could open it too, what was verified would be hidden in shell settings, and from the log alone you could not tell whether this output stood on verified approvals. Even when it is opened, "not verified" still comes out. It is passing through, not having verified.
 
-The signature is attached by [`pqcota-approve`](#pqcota-approve), and the key pair comes from `pqcota-keygen`. [The example runner](https://github.com/randyinthedev-hash/pqcota/blob/main/examples/provisioning/README.md) walks exactly that path.
+The signature is attached by [`pqcota-approve`](#pqcota-approve), and the key pair comes from [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-common/blob/main/cmd/README.md#pqcota-keygen) in `pqcota-common`. [The example runner](../../examples/provisioning/README.md) walks exactly that path.
 
 **`--level` is the default for actions the plan does not speak to.** The delegation level is a **per-asset attribute** the contract defines ("payment server = L2, stateless worker = L3"), so when an action states `automation_level` it is followed. That value is covered by the approval signature, so overriding it with a global flag would put the delegation level the approver signed and the level actually run out of step.
 
@@ -95,7 +95,7 @@ pqcota-approve --approver <id> <plan.json>
 | Argument · option | What it does |
 |---|---|
 | `--approver <id>` | the approver id. **`:` cannot be used**: it is the separator in the signature string |
-| `env PQCOTA_APPROVAL_KEY` | a base64 ed25519 **private key**, as produced by [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-discovery/blob/main/discovery/cmd/README.md) |
+| `env PQCOTA_APPROVAL_KEY` | a base64 ed25519 **private key**, as produced by [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-common/blob/main/cmd/README.md#pqcota-keygen) |
 
 The signed plan goes to stdout. The signature string has the form `<approver>:ed25519:<base64>`, and it covers **the whole plan except the approval signatures themselves**.
 
@@ -135,7 +135,7 @@ pqcota-records [node]
 
 ## ④ Where the input comes from: a finalized plan
 
-**This repo does not create plans. It only reads them.** `FinalizedPlan` is a public contract (`plan.proto`), so you write it directly as JSON. Samples per action kind and runtime, with a description of the fields, are in [`examples/provisioning/plans/`](https://github.com/randyinthedev-hash/pqcota/blob/main/examples/provisioning/plans/README.md). Pick the closest one and change `targetNodeId`, the paths and the provider to your own.
+**This repo does not create plans. It only reads them.** `FinalizedPlan` is a public contract (`plan.proto`), so you write it directly as JSON. Samples per action kind and runtime, with a description of the fields, are in [`examples/provisioning/plans/`](../../examples/provisioning/plans/README.md). Pick the closest one and change `targetNodeId`, the paths and the provider to your own.
 
 **`status` has to be `PLAN_STATUS_FINALIZED`**, or it is refused. It is the gate that prevents deploying a plan that has not been finalized.
 

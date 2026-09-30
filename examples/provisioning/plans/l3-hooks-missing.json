@@ -1,0 +1,21 @@
+{
+  "id": "ex-l3-hooks-missing",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-0",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [
+    {
+      "id": "a1",
+      "targetNodeId": "app-01",
+      "findingId": "f-jca-no-pqc",
+      "cryptoRuntime": "CRYPTO_RUNTIME_JCA",
+      "kind": "REMEDIATION_KIND_PROVIDER_INJECT",
+      "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L3_FULL_AUTO",
+      "targetAlgorithm": "ML-KEM (FIPS 203)",
+      "providerChoice": "BC",
+      "providerClass": "org.bouncycastle.jce.provider.BouncyCastleProvider",
+      "rollbackNote": "java.security 조각 제거"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "ex-custom-openssl",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-1",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "db-02",
+    "findingId": "f-openssl-3.2",
+    "cryptoRuntime": "CRYPTO_RUNTIME_OPENSSL",
+    "kind": "REMEDIATION_KIND_PROVIDER_INJECT",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+    "targetAlgorithm": "ML-KEM (FIPS 203)",
+    "providerChoice": "acme-pqc",
+    "rollbackNote": "cnf 한 줄 + 모듈 제거"
+  }]
+}

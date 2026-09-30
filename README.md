@@ -10,6 +10,7 @@ It signs and checks plans, turns a finalized plan into Ansible playbooks (stage,
 |---|---|
 | `pkg/provisioning/` | the library: the plan gate, the taxonomy-to-config generators (OpenSSL and JCA), the playbook generator, `CaptureState`, and the record stores |
 | `provisioning/cmd/` | the commands: `pqcota-provision`, `pqcota-approve`, `pqcota-records` |
+| `examples/` | runnable examples: one plan per case under `examples/provisioning/plans/`, the generated playbooks, and rollback |
 | `provisioning/README.md` | what the stage does and how to use it |
 
 ## Depends on
@@ -27,4 +28,4 @@ Until the modules are tagged, `go.mod` points at the sibling repositories with `
 
 ## Contributing · security · license
 
-Contributing and security reporting are described in the [pqcota repository](https://github.com/randyinthedev-hash/pqcota). Licensed under [Apache-2.0](LICENSE).
+Contributing and security reporting are described in the [pqcota repository](https://github.com/randyinthedev-hash/pqcota). Licensed under [Apache-2.0](https://github.com/randyinthedev-hash/pqcota/blob/main/LICENSE).

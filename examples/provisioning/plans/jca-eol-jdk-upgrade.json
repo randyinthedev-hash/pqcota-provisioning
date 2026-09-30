@@ -1,0 +1,17 @@
+{
+  "id": "ex-jca-eol",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-2",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "legacy-app",
+    "findingId": "f-jdk8-eol",
+    "cryptoRuntime": "CRYPTO_RUNTIME_JCA",
+    "kind": "REMEDIATION_KIND_JDK_UPGRADE",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+    "targetAlgorithm": "ML-KEM (FIPS 203)",
+    "rollbackNote": "이전 JDK로 복원 — 수동"
+  }]
+}

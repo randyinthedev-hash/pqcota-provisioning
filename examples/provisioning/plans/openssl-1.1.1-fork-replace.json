@@ -1,0 +1,17 @@
+{
+  "id": "ex-openssl-fork-replace",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-2",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "legacy-01",
+    "findingId": "f-openssl-1.1.1",
+    "cryptoRuntime": "CRYPTO_RUNTIME_OPENSSL",
+    "kind": "REMEDIATION_KIND_FORK_REPLACE",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+    "targetAlgorithm": "ML-KEM (FIPS 203)",
+    "rollbackNote": "이전 패키지 버전으로 복원 — 수동"
+  }]
+}

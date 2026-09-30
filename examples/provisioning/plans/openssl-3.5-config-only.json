@@ -1,0 +1,27 @@
+{
+  "id": "ex-openssl-config-only",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-0",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "web-01",
+    "findingId": "f-openssl-3.5",
+    "evidenceSources": [{
+      "findingId": "f-openssl-3.5",
+      "snapshot": {
+        "sourceNodeId": "web-01.corp.example",
+        "content": {
+          "formatVersion": "pqcota-snapshot-content/v1",
+          "digest": "7818cb766fc54daeb8eaf602addd430e7830038d7421dcd8afee35e40b775e15",
+          "rulesetVersion": "pqcota-enrich/v2"
+        }
+      }
+    }],
+    "cryptoRuntime": "CRYPTO_RUNTIME_OPENSSL",
+    "kind": "REMEDIATION_KIND_CONFIG_ONLY",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+    "targetAlgorithm": "ML-KEM (FIPS 203)",
+    "rollbackNote": "cnf 조각 제거"
+  }]
+}

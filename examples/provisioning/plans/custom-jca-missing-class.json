@@ -1,0 +1,18 @@
+{
+  "id": "ex-custom-jca-noclass",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-1",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "app-04",
+    "findingId": "f-jca-custom",
+    "cryptoRuntime": "CRYPTO_RUNTIME_JCA",
+    "kind": "REMEDIATION_KIND_PROVIDER_INJECT",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+    "targetAlgorithm": "ML-KEM (FIPS 203)",
+    "providerChoice": "acme-jce",
+    "rollbackNote": "등록 라인 + JAR 제거"
+  }]
+}

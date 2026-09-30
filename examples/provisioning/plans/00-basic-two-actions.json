@@ -1,0 +1,23 @@
+{
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [
+    {
+      "targetNodeId": "node-a",
+      "cryptoRuntime": "CRYPTO_RUNTIME_OPENSSL",
+      "kind": "REMEDIATION_KIND_PROVIDER_INJECT",
+      "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+      "providerChoice": "oqsprovider",
+      "configArtifact": "[provider_sect]\noqsprovider = oqs_sect\n[oqs_sect]\nactivate = 1"
+    },
+    {
+      "targetNodeId": "node-b",
+      "cryptoRuntime": "CRYPTO_RUNTIME_JCA",
+      "kind": "REMEDIATION_KIND_PROVIDER_INJECT",
+      "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+      "providerChoice": "BC",
+      "configArtifact": "security.provider.3=org.bouncycastle.jce.provider.BouncyCastleProvider"
+    }
+  ]
+}

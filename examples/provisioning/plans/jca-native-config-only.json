@@ -1,0 +1,17 @@
+{
+  "id": "ex-jca-native",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-0",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "app-01",
+    "findingId": "f-jdk-native-pqc",
+    "cryptoRuntime": "CRYPTO_RUNTIME_JCA",
+    "kind": "REMEDIATION_KIND_CONFIG_ONLY",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+    "targetAlgorithm": "ML-KEM (FIPS 203)",
+    "rollbackNote": "java.security 조각 제거"
+  }]
+}

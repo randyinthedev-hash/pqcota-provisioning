@@ -1,0 +1,17 @@
+{
+  "id": "ex-signature",
+  "status": "PLAN_STATUS_IN_REVIEW",
+  "scope": "ring-0",
+  "derivedFromSnapshotId": "snap-example",
+  "rulesetVersion": "rs-2026.09",
+  "actions": [{
+    "id": "a1",
+    "targetNodeId": "ca-01",
+    "findingId": "f-openssl-sig",
+    "cryptoRuntime": "CRYPTO_RUNTIME_OPENSSL",
+    "kind": "REMEDIATION_KIND_CONFIG_ONLY",
+    "automationLevel": "DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+    "targetAlgorithm": "ML-DSA (FIPS 204)",
+    "rollbackNote": "cnf 조각 제거"
+  }]
+}
