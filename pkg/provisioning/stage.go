@@ -240,7 +240,7 @@ func writeActionTasks(b *strings.Builder, a *provisioningv1.RemediationAction, c
 	inject := kind == provisioningv1.RemediationKind_REMEDIATION_KIND_PROVIDER_INJECT
 	cfgOnly := kind == provisioningv1.RemediationKind_REMEDIATION_KIND_CONFIG_ONLY
 	if !inject && !cfgOnly {
-		fmt.Fprintf(b, "    # action %s (%s): cannot be delivered through config — manual step (provisioning design §4.1, touching legacy)\n", a.GetId(), kind)
+		fmt.Fprintf(b, "    # action %s (%s): cannot be delivered through config — manual step (touching legacy)\n", a.GetId(), kind)
 		return
 	}
 

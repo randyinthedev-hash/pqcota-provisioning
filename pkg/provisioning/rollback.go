@@ -81,7 +81,7 @@ func writeRollbackTasks(b *strings.Builder, a *provisioningv1.RemediationAction,
 	inject := kind == provisioningv1.RemediationKind_REMEDIATION_KIND_PROVIDER_INJECT
 	cfgOnly := kind == provisioningv1.RemediationKind_REMEDIATION_KIND_CONFIG_ONLY
 	if !inject && !cfgOnly {
-		fmt.Fprintf(b, "    # action %s (%s): it was never delivered through config, so the rollback is manual too (provisioning design §4.1, touching legacy)\n", a.GetId(), kind)
+		fmt.Fprintf(b, "    # action %s (%s): it was never delivered through config, so the rollback is manual too (touching legacy)\n", a.GetId(), kind)
 		return
 	}
 
