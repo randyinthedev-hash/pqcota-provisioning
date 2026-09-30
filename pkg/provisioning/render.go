@@ -23,7 +23,7 @@ func Render(a *provisioningv1.RemediationAction) string {
 	}
 }
 
-// FillPlan — 계획의 모든 조치에 config_artifact를 채운다(리뷰 대상 diff 실체화, §3 정책 템플릿).
+// FillPlan — 계획의 모든 조치에 config_artifact를 채운다(리뷰 대상 diff 실체화, 규정서 §3.4 정책 템플릿).
 // 파생이므로 항상 재생성 가능(§1.2) — 저장은 편의일 뿐 원본은 (kind·target·provider).
 func FillPlan(p *provisioningv1.FinalizedPlan) {
 	for _, a := range p.GetActions() {

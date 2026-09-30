@@ -1,6 +1,6 @@
 package main_test
 
-// TP-PLAN-GATE — §3.7 실행 게이트가 **CLI에서** 실제로 막나.
+// TP-GATE-3 — §3.7 실행 게이트가 **CLI에서** 실제로 막나.
 //
 // 규칙 자체는 pkg/provisioning/plan_test.go가 이미 덮는다. 여기서 보는 것은 **배선**이다.
 // 규칙이 옳아도 제품 경로가 부르지 않으면 보장이 아니고, 실제로 한동안 그랬다: CLI가

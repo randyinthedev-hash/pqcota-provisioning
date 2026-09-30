@@ -28,7 +28,7 @@ ALTER TABLE pqcota_provisioning_record ADD COLUMN IF NOT EXISTS org TEXT NOT NUL
 CREATE INDEX IF NOT EXISTS idx_pqcota_prov_org ON pqcota_provisioning_record(org, node_id, seq);
 `
 
-// PgRecordStore — Postgres append-only 프로비저닝 레코드(§1.3 불변·§6A 롤백 근거 영속).
+// PgRecordStore — Postgres append-only 프로비저닝 레코드(§1.2 불변·프로비저닝 설계 §6A 롤백 근거 영속).
 //
 // **핸들이 조직에 묶인다** — 히스토리·메타 저장소와 같은 규칙이다.
 type PgRecordStore struct {
