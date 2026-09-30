@@ -1,4 +1,4 @@
-# provisioning/cmd/: the provisioning entry points
+# cmd/: the provisioning entry points
 
 The CLIs (Go binaries) of the provisioning stage. They **attach an approval signature** to a finalized plan, **generate an Ansible playbook** from that plan, and **persist the rollback basis**. They are sorted into four categories.
 
@@ -21,7 +21,7 @@ pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] <plan.json>
 | `--rollback` | the reverse playbook: removes the files forward placed |
 | `--allow-incomplete` | **exits 0** even if the plan has blanks. The warnings still appear |
 | `--allow-unverified-approvals` | **carries on** even with no key to check against. The default is to refuse |
-| `--dsn <postgres>` | reads the before-findings from the history, **captures the before state** and persists it as an append-only record. For the format see [DSN](https://github.com/randyinthedev-hash/pqcota-discovery/blob/main/discovery/cmd/README.md#pqcota-hosts) |
+| `--dsn <postgres>` | reads the before-findings from the history, **captures the before state** and persists it as an append-only record. For the format see [DSN](https://github.com/randyinthedev-hash/pqcota-discovery/blob/main/cmd/README.md#pqcota-hosts) |
 
 | Environment variable | What it does |
 |---|---|
@@ -32,7 +32,7 @@ pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] <plan.json>
 
 To skip approval verification, you have to **write `--allow-unverified-approvals` on the command line, and there is no other means.** If an environment variable could open it too, what was verified would be hidden in shell settings, and from the log alone you could not tell whether this output stood on verified approvals. Even when it is opened, "not verified" still comes out. It is passing through, not having verified.
 
-The signature is attached by [`pqcota-approve`](#pqcota-approve), and the key pair comes from [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-common/blob/main/cmd/README.md#pqcota-keygen) in `pqcota-common`. [The example runner](../../examples/provisioning/README.md) walks exactly that path.
+The signature is attached by [`pqcota-approve`](#pqcota-approve), and the key pair comes from [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-common/blob/main/cmd/README.md#pqcota-keygen) in `pqcota-common`. [The example runner](../examples/provisioning/README.md) walks exactly that path.
 
 **`--level` is the default for actions the plan does not speak to.** The delegation level is a **per-asset attribute** the contract defines ("payment server = L2, stateless worker = L3"), so when an action states `automation_level` it is followed. That value is covered by the approval signature, so overriding it with a global flag would put the delegation level the approver signed and the level actually run out of step.
 
@@ -60,7 +60,7 @@ pqcota-provision --level l2 plan.json > provision.yml
 ansible-playbook -i targets.ini -e pqcota_module_sha256_oqsprovider=<sha256> provision.yml
 ```
 
-Use the same `targets.ini` you used for discovery ([`pqcota-hosts`](https://github.com/randyinthedev-hash/pqcota-discovery/blob/main/discovery/cmd/README.md#pqcota-hosts)).
+Use the same `targets.ini` you used for discovery ([`pqcota-hosts`](https://github.com/randyinthedev-hash/pqcota-discovery/blob/main/cmd/README.md#pqcota-hosts)).
 
 **The tool does not supply the provider module.** The playbook copies `files/<module file>` on the controller to the target, so the user has to put that file there.
 
@@ -135,11 +135,11 @@ pqcota-records [node]
 
 ## ④ Where the input comes from: a finalized plan
 
-**This repo does not create plans. It only reads them.** `FinalizedPlan` is a public contract (`plan.proto`), so you write it directly as JSON. Samples per action kind and runtime, with a description of the fields, are in [`examples/provisioning/plans/`](../../examples/provisioning/plans/README.md). Pick the closest one and change `targetNodeId`, the paths and the provider to your own.
+**This repo does not create plans. It only reads them.** `FinalizedPlan` is a public contract (`plan.proto`), so you write it directly as JSON. Samples per action kind and runtime, with a description of the fields, are in [`examples/provisioning/plans/`](../examples/provisioning/plans/README.md). Pick the closest one and change `targetNodeId`, the paths and the provider to your own.
 
 **`status` has to be `PLAN_STATUS_FINALIZED`**, or it is refused. It is the gate that prevents deploying a plan that has not been finalized.
 
-The before-findings and `app_keys` it reads when you give `--dsn` come from the history accumulated in the inventory (the same store `pqcota-inventory` reads). → [the inventory/cmd command map](https://github.com/randyinthedev-hash/pqcota-inventory/blob/main/inventory/cmd/README.md)
+The before-findings and `app_keys` it reads when you give `--dsn` come from the history accumulated in the inventory (the same store `pqcota-inventory` reads). → [the pqcota-inventory cmd command map](https://github.com/randyinthedev-hash/pqcota-inventory/blob/main/cmd/README.md)
 
 ---
 

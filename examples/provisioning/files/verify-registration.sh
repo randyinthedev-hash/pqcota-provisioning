@@ -27,7 +27,7 @@ trap 'rm -rf "$work"' EXIT
 cd "$ROOT"
 # 여기서 보려는 것은 **JCA 등록이 실제로 되는가**이지 승인 경로가 아니다. 생성기는 확인할 키가
 # 없으면 기본으로 거절하므로 그 문을 명시적으로 열어 둔다(승인까지 밟는 모습은 ../run.sh).
-go run ./provisioning/cmd/pqcota-provision --level l2 --allow-unverified-approvals \
+go run ./cmd/pqcota-provision --level l2 --allow-unverified-approvals \
 	"examples/provisioning/plans/$CASE.json" 2>/dev/null |
 	sed -n '/content: |/,/^    - name:/p' | sed -n 's/^          //p' >"$work/pqcota.security"
 [ -s "$work/pqcota.security" ] || {

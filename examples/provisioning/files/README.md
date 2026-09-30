@@ -56,7 +56,7 @@ Even an empty file lets **the placement and checksum tasks run normally** (natur
 
 ```bash
 mkdir -p /tmp/try/files && : > /tmp/try/files/acme-pqc.so
-go run ./provisioning/cmd/pqcota-provision --level l2 --allow-unverified-approvals \
+go run ./cmd/pqcota-provision --level l2 --allow-unverified-approvals \
   examples/provisioning/plans/custom-openssl-provider.json \
   | sed 's/^  hosts: .*/  hosts: all/' > /tmp/try/provision.yml
 
@@ -74,7 +74,7 @@ To see the integrity gate as well, pass a hash. If it matches it passes, and if 
 To see the undo as well, you have to continue **inside the same container**. `docker run` is a new container each time, so running it separately leaves nothing to delete (you get `changed=0` and it looks as if nothing happened):
 
 ```bash
-go run ./provisioning/cmd/pqcota-provision --level l2 --allow-unverified-approvals --rollback \
+go run ./cmd/pqcota-provision --level l2 --allow-unverified-approvals --rollback \
   examples/provisioning/plans/custom-openssl-provider.json \
   | sed 's/^  hosts: .*/  hosts: all/' > /tmp/try/provision-rollback.yml
 

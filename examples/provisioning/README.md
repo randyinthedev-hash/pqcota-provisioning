@@ -9,7 +9,7 @@ The cases below show how the output changes when you **swap only the plan** and 
 ./examples/provisioning/run.sh --all
 ```
 
-> The whole flow and the reasoning are in [Provisioning](../../provisioning/README.md). This is where you look at **the real output for each case**.
+> The whole flow and the reasoning are in [Provisioning](../../README.md). This is where you look at **the real output for each case**.
 
 > ⚠️ **The examples generate playbooks.** The **provider module binaries** such as `oqsprovider.so` and `acme-jce.jar` **are not in this repo** (they differ per arch, and a dummy would look like it works, which is harmful). To actually run a generated playbook, put your own module in [`files/`](files/README.md) or pass a path with `-e pqcota_module_src_<name>=`.
 >
@@ -79,7 +79,7 @@ security.provider.2=<acme-jce: check the provider's documentation for the exact 
 
 > **For the JVM to find the JAR**, it has to be on the classpath. The method differs by JDK generation (the `lib/ext` extension mechanism was **removed in JDK 9**), so the generated fragment explains both.
 
-For the module delivery procedure (controller → target, the `files/` convention, sha256), see [provisioning/cmd · Applying it](../../provisioning/cmd/README.md#applying-it).
+For the module delivery procedure (controller → target, the `files/` convention, sha256), see [cmd · Applying it](../../cmd/README.md#applying-it).
 
 ## Boundary cases
 
@@ -149,4 +149,4 @@ It reads the before-findings from the history and leaves the **state before the 
 ## What is not here
 
 **Dynamic provisioning** (injecting into a running process without a restart) is not done. **Fleet orchestration**
-(drain, rolling, health-check gates) is not done. Command map: [provisioning/cmd/README](../../provisioning/cmd/README.md).
+(drain, rolling, health-check gates) is not done. Command map: [cmd/README](../../cmd/README.md).

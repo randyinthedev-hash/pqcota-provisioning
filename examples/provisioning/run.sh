@@ -44,8 +44,8 @@ trap 'rm -rf "$TMP"' EXIT
 # `go run`은 대상의 종료 코드를 1로 감싼다 — 빈칸이 남은 계획의 3을 그대로 보려면 바이너리를
 # 직접 불러야 한다. 케이스마다 다시 컴파일하지 않는 이점도 있다.
 go build -o "$TMP/keygen"   github.com/randyinthedev-hash/pqcota-common/cmd/pqcota-keygen
-go build -o "$TMP/approve"  ./provisioning/cmd/pqcota-approve
-go build -o "$TMP/provision" ./provisioning/cmd/pqcota-provision
+go build -o "$TMP/approve"  ./cmd/pqcota-approve
+go build -o "$TMP/provision" ./cmd/pqcota-provision
 
 APPROVER_KEYS="$("$TMP/keygen")"
 APPROVER_PRIV="$(printf '%s\n' "$APPROVER_KEYS" | sed -n 's/^PQCOTA_SIGN_KEY=//p')"
