@@ -1,4 +1,4 @@
-// Command pqcota-records — 영속된 프로비저닝 레코드(롤백 근거)를 조회한다(§6A).
+// Command pqcota-records — 영속된 프로비저닝 레코드(롤백 근거)를 조회한다(프로비저닝 설계 §6A).
 // pqcota-provision이 append-only로 남긴 before/after·영향 앱·상태를 읽기전용으로 나열한다.
 // 이 뷰는 "무엇이 언제 어떤 before로 스테이징됐나"만 보인다.
 //

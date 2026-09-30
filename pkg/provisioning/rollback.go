@@ -8,10 +8,10 @@ import (
 	provisioningv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/provisioning/v1"
 )
 
-// GenerateRollbackPlaybook — GenerateProvisioningPlaybook의 역방향(§6A). forward가 스테이지한
+// GenerateRollbackPlaybook — GenerateProvisioningPlaybook의 역방향(프로비저닝 설계 §6A). forward가 스테이지한
 // provider 모듈과 배치한 config 조각을 **제거**해 before 상태로 되돌리는 Ansible 플레이북을 생성한다.
 //
-// forward는 원본(기존 모듈·config)을 *덮어쓰지 않고 파일을 추가*하므로(§6A 원자적 배치), 그 추가분을
+// forward는 원본(기존 모듈·config)을 *덮어쓰지 않고 파일을 추가*하므로(프로비저닝 설계 §6A 원자적 배치), 그 추가분을
 // 지우면 원본이 그대로 복원된다 — before 원문을 따로 재생성할 필요가 없다.
 //
 // L3면 **forward의 정확한 역순**으로 되돌린다: pre → deactivate → 파일 제거 → restart.
