@@ -7,7 +7,7 @@ import (
 )
 
 // Render — 확정 계획의 조치 한 건에 대한 배포 아티팩트(config 조각)를 결정론적으로 생성한다(§1.2 파생).
-// crypto_runtime으로 OpenSSL/JCA 분기(docs/runtime-acceptance.md). config 주입형(CONFIG_ONLY·PROVIDER_INJECT)은 실제 조각을,
+// crypto_runtime으로 OpenSSL/JCA 분기. config 주입형(CONFIG_ONLY·PROVIDER_INJECT)은 실제 조각을,
 // 그 외(포크 교체·프록시·재빌드·JDK 업그레이드·앱 reconfig·폐기)는 config로 안 되는 조치임을
 // 정직하게 명시한 주석 블록을 낸다(프로비저닝 설계 §4.1·§4.2 "레거시를 건드리나").
 //
