@@ -11,6 +11,7 @@ package main_test
 // 계획·노드 이름을 쓴다.
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,24 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// countRecords — 이 조직의 레코드 행 수. 읽기가 아무것도 쓰지 않음을 **DB에서** 보려고 직접 센다.
+func countRecords(t *testing.T, dsn, organization string) int {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	var n int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM pqcota_provisioning_record WHERE org=$1`, organization).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
 
 func buildRecords(t *testing.T) string {
 	t.Helper()
@@ -70,7 +88,8 @@ func TestDSNPathKeepsRecordsInTheNamedOrganization(t *testing.T) {
 		t.Errorf("조직을 대지 않은 조회에서 조직 %s의 레코드가 보인다:\n%s", orgA, got)
 	}
 
-	// TP-RECORD-6 — 노드를 주면 그 노드만, 읽기는 아무것도 바꾸지 않는다(두 번 읽어 같다).
+	// TP-RECORD-6 — 노드를 주면 그 노드만, 읽기는 레코드를 쓰지 않는다(읽기 전후에 이 조직의 행 수가 같다).
+	rowsBefore := countRecords(t, dsn, orgA)
 	byNode := list(envWith("PQCOTA_ORG="+orgA), node)
 	if !strings.Contains(byNode, "provisioning records (1)") || !strings.Contains(byNode, "node="+node) {
 		t.Errorf("노드를 주었는데 그 노드의 레코드 하나가 나오지 않았다:\n%s", byNode)
@@ -80,6 +99,9 @@ func TestDSNPathKeepsRecordsInTheNamedOrganization(t *testing.T) {
 	}
 	if none := list(envWith("PQCOTA_ORG="+orgA), "no-such-node-"+suffix); !strings.Contains(none, "provisioning records (0)") {
 		t.Errorf("없는 노드인데 레코드가 나왔다:\n%s", none)
+	}
+	if rowsAfter := countRecords(t, dsn, orgA); rowsAfter != rowsBefore || rowsBefore != 1 {
+		t.Errorf("읽기 전후의 행 수가 다르거나(%d → %d) 처음 실행이 남긴 한 건이 아니다", rowsBefore, rowsAfter)
 	}
 
 	// TP-RECORD-4 — 못 찾은 스냅샷 참조는 불완전(종료 3)이다. 그래도 레코드는 남는다.

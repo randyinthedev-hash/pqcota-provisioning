@@ -85,6 +85,7 @@ func TestApprovalsAreCheckedWithTheApproversOwnKey(t *testing.T) {
 	bin := buildCLI(t)
 	pubA, privA, _ := sign.Generate()
 	pubB, _, _ := sign.Generate()
+	pubC, privC, _ := sign.Generate()
 	signer := func(name, priv string) []struct{ name, priv string } {
 		return []struct{ name, priv string }{{name, priv}}
 	}
@@ -135,6 +136,22 @@ func TestApprovalsAreCheckedWithTheApproversOwnKey(t *testing.T) {
 			wantCode: 0, wantErr: []string{"is not a signature", "approvals verified: reviewer-1"}, wantOut: true,
 		},
 		{
+			name: "유효한 서명 옆에 무효한 서명이 있으면 거절한다(하나라도 틀리면 거절)",
+			plan: func() string {
+				return signedPlan(t, []struct{ name, priv string }{{"reviewer-1", privA}, {"reviewer-2", privA}}, nil)
+			},
+			keys:     "reviewer-1=" + pubA + ",reviewer-2=" + pubB, // reviewer-2의 서명은 A의 키로 만들었다
+			wantCode: 1, wantErr: []string{"approval signatures did not check out", "reviewer-2"},
+		},
+		{
+			name: "서명이 둘 다 유효하면 둘 다 확인된 승인자로 말한다",
+			plan: func() string {
+				return signedPlan(t, []struct{ name, priv string }{{"reviewer-1", privA}, {"reviewer-2", privC}}, nil)
+			},
+			keys:     "reviewer-1=" + pubA + ",reviewer-2=" + pubC,
+			wantCode: 0, wantErr: []string{"approvals verified: reviewer-1, reviewer-2"}, wantOut: true,
+		},
+		{
 			name:     "키 목록의 모양이 틀리면 거절한다",
 			plan:     func() string { return signedPlan(t, signer("reviewer-1", privA), nil) },
 			keys:     "not-a-key-list",
@@ -163,7 +180,7 @@ func TestApprovalsAreCheckedWithTheApproversOwnKey(t *testing.T) {
 }
 
 // TP-GATE-22 — PQCOTA_REQUIRE_APPROVAL=1은 받아 주되 아무것도 바꾸지 않는다. 키 없이 거절하는 것이
-// 이제 기본이라, 이 변수를 줘도 안 줘도 같은 일이 일어난다.
+// 이제 기본이라, 이 변수를 줘도 안 줘도 같은 일이 일어난다: **종료 코드, stdout, stderr가 모두 같다.**
 func TestRequireApprovalVariableChangesNothing(t *testing.T) {
 	bin := buildCLI(t)
 	plan := writePlan(t, planOK)
@@ -171,10 +188,14 @@ func TestRequireApprovalVariableChangesNothing(t *testing.T) {
 		{"--level", "l2", plan},             // 키가 없다: 거절
 		{"--level", "l2", unverified, plan}, // 알고 연다: 통과, 확인하지 않았다고 말한다
 	} {
-		_, _, withoutVar := runProvision(t, bin, envWith(), args...)
-		_, _, withVar := runProvision(t, bin, envWith("PQCOTA_REQUIRE_APPROVAL=1"), args...)
-		if withoutVar != withVar {
-			t.Errorf("%v: 변수가 종료 코드를 바꿨다(없이 %d, 줘서 %d)", args, withoutVar, withVar)
+		so1, se1, c1 := runProvision(t, bin, envWith(), args...)
+		so2, se2, c2 := runProvision(t, bin, envWith("PQCOTA_REQUIRE_APPROVAL=1"), args...)
+		if c1 != c2 || so1 != so2 || se1 != se2 {
+			t.Errorf("%v: 변수가 결과를 바꿨다 — 종료 코드 %d/%d, stdout 같음=%v, stderr 같음=%v\n--- 없이\n%s\n--- 줘서\n%s",
+				args, c1, c2, so1 == so2, se1 == se2, se1, se2)
+		}
+		if c1 == 0 && !strings.Contains(se1, "**not checked**") {
+			t.Errorf("%v: 열어 준 자리에서 '확인하지 않았다'가 사라졌다:\n%s", args, se1)
 		}
 	}
 }
