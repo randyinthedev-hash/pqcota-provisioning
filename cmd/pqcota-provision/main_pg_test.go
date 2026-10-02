@@ -23,7 +23,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// countRecords — 이 조직의 레코드 행 수. 읽기가 아무것도 쓰지 않음을 **DB에서** 보려고 직접 센다.
+// countRecords — 이 조직의 레코드 행 수를 DB에서 직접 센다. 읽기 전후의 수가 같음만 보여 주며,
+// 행의 내용이 바뀌지 않았음까지는 보여 주지 않는다.
 func countRecords(t *testing.T, dsn, organization string) int {
 	t.Helper()
 	pool, err := pgxpool.New(context.Background(), dsn)
@@ -88,7 +89,8 @@ func TestDSNPathKeepsRecordsInTheNamedOrganization(t *testing.T) {
 		t.Errorf("조직을 대지 않은 조회에서 조직 %s의 레코드가 보인다:\n%s", orgA, got)
 	}
 
-	// TP-RECORD-6 — 노드를 주면 그 노드만, 읽기는 레코드를 쓰지 않는다(읽기 전후에 이 조직의 행 수가 같다).
+	// TP-RECORD-6 — 노드를 주면 그 노드만 나온다. 읽기 전후에 이 조직의 레코드 행 수가 같음을 확인한다.
+	// 기존 행의 내용 변경이나, 행 수를 유지하는 쓰기(고치기, 지우고 다시 넣기)는 확인하지 않는다.
 	rowsBefore := countRecords(t, dsn, orgA)
 	byNode := list(envWith("PQCOTA_ORG="+orgA), node)
 	if !strings.Contains(byNode, "provisioning records (1)") || !strings.Contains(byNode, "node="+node) {
