@@ -1,3 +1,5 @@
+English · [한국어](README.ko.md)
+
 # cmd/: the provisioning entry points
 
 The CLIs (Go binaries) of the provisioning stage. They **attach an approval signature** to a finalized plan, **generate an Ansible playbook** from that plan, and **persist the rollback basis**. They are sorted into four categories.

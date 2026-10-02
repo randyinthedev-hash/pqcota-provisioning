@@ -1,3 +1,5 @@
+English · [한국어](README.ko.md)
+
 # plans/: sample plans (`FinalizedPlan`)
 
 These are the **input** of `pqcota-provision`. This repo does not create plans, it only reads them, so to use one the user writes it. Pick the closest sample here and change `targetNodeId`, the paths and the provider to your own.
@@ -112,7 +114,7 @@ The module file itself, in every case, is something the user obtains and puts in
 
 ### `activation`: the L3 hooks
 
-The user writes the commands, and **the generator decides the order they are laid out in** (apply: `pre` → place → `activate` → `restart`; rollback: the exact reverse).
+The user writes the commands, and **the generator decides the order they are laid out in** (apply: `pre` → place → `activate` → `restart`; rollback: `pre` → deactivate → remove → `restart`).
 
 ```json
 "activation": {

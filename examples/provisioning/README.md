@@ -1,3 +1,5 @@
+English · [한국어](README.ko.md)
+
 # examples/provisioning: see what gets generated for each plan
 
 The cases below show how the output changes when you **swap only the plan** and keep the same command. Each case is one JSON file in [`plans/`](plans/README.md).

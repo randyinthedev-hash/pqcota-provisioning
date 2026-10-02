@@ -1,3 +1,5 @@
+English · [한국어](README.ko.md)
+
 # files/: put your own provider modules here
 
 **This repo has no provider module binaries.** A `.so` differs per arch and libc, and a JAR is around 10 MB, so committing them would leave the repo holding **copies that never get updated**. Leaving dummies here is worse: they never load, yet look like they work.
@@ -26,7 +28,7 @@ The output shows three things: the **provider order** after the fragment is appl
 
 That comparison reveals one important fact: `security.provider.2=` does **not insert, it replaces that slot.** On JDK 21 the `SunRsaSign` that was originally number 2 drops out of the list, and the RSA services move to the new provider's implementation. To avoid pushing it out, you have to shift the later numbers down by one in the target node's `java.security` before inserting. That requires knowing that node's original, so the tool does not do it for you.
 
-Run with `jca-native-config-only` and all three algorithms come out as **absent**. It is a case that registers no provider, and JDK 21 has no native ML-KEM. That is an honest result too.
+Run with `jca-native-config-only` and all three algorithms it checks (`ML-KEM`, `ML-KEM-768` and `ML-DSA`) come out as **absent**. It is a case that registers no provider, and JDK 21 has no native ML-KEM. That is an honest result too.
 
 To **actually run** a generated playbook, the module has to be on the controller. Ansible `copy` also looks for `src` in the `files/` next to the playbook, so putting it here works without arguments:
 

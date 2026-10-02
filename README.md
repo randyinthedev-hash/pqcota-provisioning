@@ -1,3 +1,5 @@
+English · [한국어](README.ko.md)
+
 # pqcota-provisioning — generating migration artifacts (stage 3)
 
 Takes a **finalized plan** (`FinalizedPlan`) as input and generates PQC migration artifacts — config fragments, Ansible playbooks (**you choose how far they go** — L1 stages the module, L2 adds the config, L3 activates and restarts; **both apply and rollback**), and the basis for undoing (before capture, rollback records).
