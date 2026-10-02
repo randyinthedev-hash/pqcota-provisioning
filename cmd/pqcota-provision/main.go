@@ -12,6 +12,7 @@
 //	       [--allow-incomplete] [--allow-unverified-approvals] <plan.json>
 //
 //		--dsn 지정 시: 히스토리에서 before-findings를 읽어 레코드를 캡처·영속(같은 저장소).
+//		             이력과 레코드는 env PQCOTA_ORG가 가리키는 같은 조직에 묶인다.
 //		미지정 시: 플레이북만 stdout(레코드 없음).
 //		env PQCOTA_APPROVAL_KEYS   : `<승인자>=<base64 공개키>` 콤마 구분. 승인 서명을 **그 승인자의
 //		                             키로** 검증한다(§3.3③). 하나라도 어긋나면 거절한다.
@@ -129,7 +130,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer hist.Close()
-	recs, err := provisioning.NewPgRecordStore(ctx, *dsn)
+	// 이력과 **같은 조직**으로 연다. 조직을 대지 않고 열면 PQCOTA_ORG를 줘도 레코드가 `default` 조직에 쌓이고,
+	// pqcota-records가 그것을 못 보며, PQCOTA_REQUIRE_ORG=1인 배포에서는 이 경로가 열리지 않는다.
+	recs, err := provisioning.NewPgRecordStoreIn(ctx, *dsn, org.FromEnv())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "record store:", err)
 		os.Exit(1)

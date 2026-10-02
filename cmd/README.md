@@ -53,7 +53,9 @@ The playbook goes to stdout. Take it with `> provision.yml`.
 
 **An empty hook at `--level l3` is not invented.** If the plan has no `activate`, that task is not made and **what does not happen is announced on stderr** (for example, with no restart hook: "the new provider may never be loaded"). How to activate depends on how the app starts, which the tool cannot know.
 
-**What `--dsn` does is record, not apply.** It captures the state *before* the action (module@version, config, provider chain), which becomes the basis for saying what to return to when you undo it later.
+**`--dsn` reads the history and writes the records under the organization named by `PQCOTA_ORG`** (the default organization when it is not set; with `PQCOTA_REQUIRE_ORG=1` an organization must be named). `pqcota-records` reads under the same variable.
+
+**What `--dsn` does is record, not apply.** It captures the state *before* the action (the modules with their versions, and the provider chain; the configuration itself is not captured), which becomes the basis for saying what to return to when you undo it later.
 
 ### Applying it
 
@@ -133,7 +135,7 @@ pqcota-records [node]
 |---|---|
 | `[node]` | only that node. If omitted, all of them |
 
-`env PQCOTA_DSN` is required: it reads the store that `pqcota-provision --dsn` wrote. It lists the id, status, affected apps and before/after modules. **It is read-only and changes no state.**
+`env PQCOTA_DSN` is required: it reads the store that `pqcota-provision --dsn` wrote. It lists the id, status, affected apps, the modules captured before the change and the snapshot references. **It is read-only and changes no state.**
 
 ## ④ Where the input comes from: a finalized plan
 
