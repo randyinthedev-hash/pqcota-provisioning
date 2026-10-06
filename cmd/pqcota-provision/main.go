@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 // Command pqcota-provision — 확정 계획(FinalizedPlan JSON)에서 프로비저닝 산출물을 만든다:
 //
 //	(1) L1/L2 Ansible 플레이북 생성(규정서 §4.4 — core는 생성만, 실행은 사용자 Ansible)

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 randyinthedev
+# SPDX-License-Identifier: Apache-2.0
 # examples/provisioning — 확정 계획(plans/*.json)에서 Ansible 플레이북을 생성한다.
 #
 #   ./run.sh                        케이스 목록 + 기본 케이스 실행

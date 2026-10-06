@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 // TP-GATE-20 — 사용법이 틀리면 서명하지 않고 알려 준다: `--approver`·계획 파일·`PQCOTA_APPROVAL_KEY`가

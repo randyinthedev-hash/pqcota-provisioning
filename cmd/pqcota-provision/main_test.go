@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 package main_test
 
 // TP-GATE-3 — §3.7 실행 게이트가 **CLI에서** 실제로 막나.

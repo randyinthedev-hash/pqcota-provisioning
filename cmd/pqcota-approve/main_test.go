@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 // 빌드한 pqcota-approve를 실제로 부른다. 규칙(PrepareApproval)이 옳은지는 pkg/provisioning의

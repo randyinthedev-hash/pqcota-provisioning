@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 package main_test
 
 // TP-GATE-21·22 — 승인 서명을 **등록된 키로 확인하는 배선**이 CLI에서 실제로 막고 통과시키나.

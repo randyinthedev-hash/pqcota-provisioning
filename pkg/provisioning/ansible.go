@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 // Package provisioning — 확정 계획에서 프로비저닝 산출물(Ansible 플레이북·롤백·레코드)을 생성한다(프로비저닝 설계 §5).
 // 자체 원격 실행 엔진을 만들지 않는다(§4.4) — 사용자의 기존 substrate(Ansible)가 실행하도록
 // 플레이북을 "생성"만 한다. 대상은 스코프 마스터 게이트 통과 노드에 한정(§1.4).

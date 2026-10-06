@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 // Command pqcota-approve — 계획에 **승인 서명**을 붙이고, 첫 승인이면 상태를 FINALIZED로 올린다
 // (§3.3③ finalize 전제).
 //

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 randyinthedev
+# SPDX-License-Identifier: Apache-2.0
 # 생성한 java.security 조각이 **정말로 provider를 등록하는가**를 실제 JVM에서 확인한다.
 #
 # 빈 파일로 플레이북을 돌리면 "Ansible이 파일을 복사했다"까지만 확인된다. 그것은 생성물이 의도한

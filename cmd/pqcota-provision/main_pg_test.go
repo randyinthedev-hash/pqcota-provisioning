@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-License-Identifier: Apache-2.0
+
 package main_test
 
 // TP-RECORD-4·5·6 — `--dsn` 경로를 **빌드한 명령으로, 실제 Postgres에서** 시험한다.
