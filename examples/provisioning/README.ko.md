@@ -28,7 +28,7 @@
 
 | 케이스 | 관측된 상황 | `kind` | 생성되는 것 |
 |---|---|---|---|
-| [`openssl-3.5-config-only`](plans/openssl-3.5-config-only.json) | 3.5+ 네이티브 PQC | `CONFIG_ONLY` | `Groups = X25519MLKEM768:x25519` **한 줄.** provider 모듈은 없습니다 |
+| [`openssl-3.5-config-only`](plans/openssl-3.5-config-only.json) | 3.5+ 네이티브 PQC | `CONFIG_ONLY` | `Groups = X25519MLKEM768:x25519` 하나를 설정하는 조각입니다. OpenSSL이 이 설정을 읽도록 `openssl_init`·`ssl_conf` 섹션으로 감쌉니다. provider 모듈은 없습니다 |
 | [`openssl-3.0-provider-inject`](plans/openssl-3.0-provider-inject.json) | 3.0–3.4(provider API가 있음) | `PROVIDER_INJECT` | `/opt/pqcota/oqsprovider.so`에 놓은 모듈 + 그 **절대 경로를 참조하는** 설정 |
 | [`openssl-1.1.1-fork-replace`](plans/openssl-1.1.1-fork-replace.json) | 1.1.1 · 1.0.2(provider API 없음) | `FORK_REPLACE` | **아무것도 배치하지 않습니다.** 설정으로 전달할 수 없다는 주석이 남습니다. 수동 단계입니다 |
 

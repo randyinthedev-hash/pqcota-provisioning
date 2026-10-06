@@ -28,7 +28,7 @@ The cases below show how the output changes when you **swap only the plan** and 
 
 | Case | Observed situation | `kind` | What is generated |
 |---|---|---|---|
-| [`openssl-3.5-config-only`](plans/openssl-3.5-config-only.json) | 3.5+ native PQC | `CONFIG_ONLY` | **one line**, `Groups = X25519MLKEM768:x25519`. No provider module |
+| [`openssl-3.5-config-only`](plans/openssl-3.5-config-only.json) | 3.5+ native PQC | `CONFIG_ONLY` | a config fragment whose only setting is `Groups = X25519MLKEM768:x25519`, wrapped in the `openssl_init` and `ssl_conf` sections OpenSSL needs to read it. No provider module |
 | [`openssl-3.0-provider-inject`](plans/openssl-3.0-provider-inject.json) | 3.0–3.4 (has the provider API) | `PROVIDER_INJECT` | the module placed at `/opt/pqcota/oqsprovider.so` + a config that **references its absolute path** |
 | [`openssl-1.1.1-fork-replace`](plans/openssl-1.1.1-fork-replace.json) | 1.1.1 · 1.0.2 (no provider API) | `FORK_REPLACE` | **nothing is placed**. A comment saying it cannot be delivered through config: a manual step |
 

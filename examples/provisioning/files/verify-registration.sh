@@ -25,11 +25,31 @@ trap 'rm -rf "$work"' EXIT
 
 # 1) 계획 → java.security 조각. 플레이북이 노드에 놓는 바로 그 내용을 꺼낸다.
 cd "$ROOT"
-# 여기서 보려는 것은 **JCA 등록이 실제로 되는가**이지 승인 경로가 아니다. 생성기는 확인할 키가
-# 없으면 기본으로 거절하므로 그 문을 명시적으로 열어 둔다(승인까지 밟는 모습은 ../run.sh).
-go run ./cmd/pqcota-provision --level l2 --allow-unverified-approvals \
-	"examples/provisioning/plans/$CASE.json" 2>/dev/null |
-	sed -n '/content: |/,/^    - name:/p' | sed -n 's/^          //p' >"$work/pqcota.security"
+# 예제 계획은 승인 전(IN_REVIEW)이다. 생성기는 확정된 계획만 받으므로 --allow-unverified-approvals로
+# 서명 검증을 건너뛰어도 거부된다(그 플래그는 확정 상태 관문을 열지 않는다). 그래서 ../run.sh처럼
+# 이 실행 안에서만 쓰는 키로 실제로 승인하고, 그 키로 검증하게 한다.
+go build -o "$work/keygen" github.com/randyinthedev-hash/pqcota-common/cmd/pqcota-keygen
+go build -o "$work/approve" ./cmd/pqcota-approve
+go build -o "$work/provision" ./cmd/pqcota-provision
+keys="$("$work/keygen")"
+PQCOTA_APPROVAL_KEY="$(printf '%s\n' "$keys" | sed -n 's/^PQCOTA_SIGN_KEY=//p')" \
+	"$work/approve" --approver verify-registration "examples/provisioning/plans/$CASE.json" \
+	>"$work/plan.signed.json" 2>"$work/approve.err" || {
+	echo "✗ approving $CASE failed:" >&2
+	cat "$work/approve.err" >&2
+	exit 1
+}
+# 빈칸이 남은 계획(종료 상태 3)도 조각은 나온다. 여기서 보려는 것은 조각이 JVM에서 먹는가이므로
+# 3은 받아들이고, 거부(1)·사용법(2)은 그 이유를 보이고 멈춘다. 오류를 버리면 왜 멈췄는지 모른다.
+st=0
+PQCOTA_APPROVAL_KEYS="verify-registration=$(printf '%s\n' "$keys" | sed -n 's/^PQCOTA_VERIFY_KEY=//p')" \
+	"$work/provision" --level l2 "$work/plan.signed.json" >"$work/playbook.yml" 2>"$work/provision.err" || st=$?
+if [ "$st" != 0 ] && [ "$st" != 3 ]; then
+	echo "✗ generating the playbook for $CASE failed (exit $st):" >&2
+	cat "$work/provision.err" >&2
+	exit 1
+fi
+sed -n '/content: |/,/^    - name:/p' "$work/playbook.yml" | sed -n 's/^          //p' >"$work/pqcota.security"
 [ -s "$work/pqcota.security" ] || {
 	echo "✗ no java.security fragment came out of $CASE (does this case stage no config?)" >&2
 	exit 1
