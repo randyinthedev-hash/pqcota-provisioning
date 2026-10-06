@@ -138,4 +138,6 @@ go test ./...   # unit tests only
 
 ## Contributing · security · license
 
-Contributing and security reporting are described in the [pqcota repository](https://github.com/randyinthedev-hash/pqcota). Licensed under [Apache-2.0](https://github.com/randyinthedev-hash/pqcota/blob/main/LICENSE).
+Contributing and security reporting are described in the [pqcota repository](https://github.com/randyinthedev-hash/pqcota).
+
+Copyright 2026 Great Honor <randyinthedev@gmail.com>. Licensed under the [Apache License 2.0](https://github.com/randyinthedev-hash/pqcota-provisioning/blob/main/LICENSE).
