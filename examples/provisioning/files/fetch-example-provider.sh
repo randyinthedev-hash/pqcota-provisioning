@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: 2026 randyinthedev
+# SPDX-FileCopyrightText: 2026 Great Honor <randyinthedev@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 # 예제용 **진짜** provider를 가져온다 — 리포에 바이너리를 넣지 않으면서 예제를 끝까지 돌리기 위해.
 #

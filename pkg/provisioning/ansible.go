@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 randyinthedev
+// SPDX-FileCopyrightText: 2026 Great Honor <randyinthedev@gmail.com>
 // SPDX-License-Identifier: Apache-2.0
 
 // Package provisioning — 확정 계획에서 프로비저닝 산출물(Ansible 플레이북·롤백·레코드)을 생성한다(프로비저닝 설계 §5).
