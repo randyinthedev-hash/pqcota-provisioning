@@ -46,6 +46,7 @@ The playbook goes to stdout. Take it with `> provision.yml`.
 |---|---|
 | `0` | the output came out and there are no blanks. With `--dsn`, it looks up each action's snapshot reference in the history and leaves it on the record (`pqcota-records` shows it as a `snapshot:` line) |
 | `1` | **refused**: this plan is not grounds for execution (not finalized, no approval, no action, approval cannot be verified, approval verification failed). Not a single line of playbook comes out |
+| `1` | also exit 1: the database connection, lookup or record write failed after the playbook was printed, so the playbook is already out |
 | `3` | **incomplete**: the output came out but has blanks. The target algorithm, an activation hook or the traceability evidence is empty, or **the shape of a snapshot reference is wrong** (caught even without `--dsn`), or **it was looked up with `--dsn` and is not in the history, or the snapshot found does not contain that finding.** Which one it is, is written by name on stderr |
 | `2` | the usage is wrong |
 
