@@ -87,7 +87,7 @@ pqcota-provision --level l2 --rollback plan.json > provision-rollback.yml
 ansible-playbook -i targets.ini provision-rollback.yml
 ```
 
-Applying does not overwrite the original and *adds* files, so removing what was added is the restore. At L3 the `deactivate` hook also undoes the activation.
+Applying adds files and leaves the originals untouched; undoing removes only the files this plan staged, and at L3 the `deactivate` hook also undoes the activation. An earlier pqcota version at the same path is not brought back.
 
 ## ② Approve: attach a signature to a plan
 

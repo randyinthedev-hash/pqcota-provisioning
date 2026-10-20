@@ -4,7 +4,7 @@
 
 **확정된 계획**(`FinalizedPlan`)을 입력으로 받아 PQC 이관 산출물을 생성합니다. 설정 조각, Ansible 플레이북(**어디까지 할지는 사용자가 고릅니다.** L1은 모듈을 스테이징하고, L2는 설정을 더하고, L3은 활성화와 재시작까지 합니다. **적용과 되돌림 모두 생성합니다**), 그리고 되돌릴 근거(변경 전 기록, 되돌림 기록)입니다.
 
-무엇을 바꾸고 어떻게 되돌릴지는 **생성기가 결정적으로 정합니다.** 생성된 플레이북은 사용자 자신의 Ansible로 실행합니다. 계획은 **사용자가 씁니다** → [샘플과 필드](examples/provisioning/plans/README.ko.md).
+무엇을 바꿀지는 **사용자가 쓴 계획**이 정하고, 생성기는 그 계획에서 적용 파일과 되돌림 파일을 **결정적으로** 만듭니다. 생성된 플레이북은 사용자 자신의 Ansible로 실행합니다 → [샘플과 필드](examples/provisioning/plans/README.ko.md).
 
 > **범위**: 런타임은 **openssl**과 **jca** 둘입니다. 그 밖의 것은 산출물을 만들지 않고 그렇다고 적습니다(`# (unknown runtime)`). 출력은 POSIX 방식의 파일 배치(스테이징과 Ansible `copy`/`absent`)를 전제하므로 **노드는 Linux입니다.** CNG 전환물 생성은 [로드맵](https://github.com/randyinthedev-hash/pqcota/blob/main/RELEASE_NOTES.md#roadmap--upcoming-releases-planned)(영문)에 있습니다.
 

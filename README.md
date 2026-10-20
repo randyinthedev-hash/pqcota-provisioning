@@ -4,7 +4,7 @@ English · [한국어](README.ko.md)
 
 Takes a **finalized plan** (`FinalizedPlan`) as input and generates PQC migration artifacts — config fragments, Ansible playbooks (**you choose how far they go** — L1 stages the module, L2 adds the config, L3 activates and restarts; **both apply and rollback**), and the basis for undoing (before capture, rollback records).
 
-What to change and how to undo it is **decided deterministically by the generator**; running the resulting playbook is done by the user's own Ansible. The plan is **written by the user** → [samples and fields](examples/provisioning/plans/README.md).
+The plan, **written by the user**, says what to change; from it the generator produces the apply and undo files **deterministically**, and the user's own Ansible runs the resulting playbook → [samples and fields](examples/provisioning/plans/README.md).
 
 > **Scope** — two runtimes: **openssl** and **jca**. Anything else produces no artifact and says so (`# (unknown runtime)`). The output assumes POSIX file placement (staging plus Ansible `copy`/`absent`), so **the nodes are Linux**. CNG provisioning is on the [roadmap](https://github.com/randyinthedev-hash/pqcota/blob/main/RELEASE_NOTES.md#roadmap--upcoming-releases-planned).
 

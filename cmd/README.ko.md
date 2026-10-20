@@ -87,7 +87,7 @@ pqcota-provision --level l2 --rollback plan.json > provision-rollback.yml
 ansible-playbook -i targets.ini provision-rollback.yml
 ```
 
-적용은 원본을 덮어쓰지 않고 파일을 *더하므로*, 더한 것을 제거하면 복원입니다. L3에서는 `deactivate` 훅이 활성화도 되돌립니다.
+적용은 원본을 덮어쓰지 않고 파일을 더합니다. 되돌림은 이 계획이 놓은 파일만 지우고, L3에서는 `deactivate` 훅이 활성화도 되돌립니다. 같은 경로의 이전 pqcota 판을 되살리지는 않습니다.
 
 ## ② 승인: 계획에 서명 붙이기
 
