@@ -78,6 +78,9 @@ func main() {
 		if errors.Is(err, provisioning.ErrNotFinalized) {
 			tail = "Only a finalized plan justifies provisioning."
 		}
+		if errors.Is(err, sign.ErrNUL) {
+			tail = "Remove the NUL character and have the plan approved again — an approval cannot tell such a plan from another one."
+		}
 		fmt.Fprintf(os.Stderr, "refused: %v. %s\n", err, tail)
 		os.Exit(1)
 	}

@@ -10,6 +10,7 @@ import (
 	commonv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/common/v1"
 	provisioningv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/provisioning/v1"
 	"github.com/randyinthedev-hash/pqcota-common/pkg/kernel/registry"
+	"github.com/randyinthedev-hash/pqcota-common/pkg/kernel/sign"
 )
 
 // ErrNotFinalized — FINALIZED 아닌 계획을 실행 근거로 쓰려 할 때(§3.7 최강 게이트).
@@ -48,6 +49,11 @@ func Executable(p *provisioningv1.FinalizedPlan) error {
 	}
 	if len(p.GetActions()) == 0 {
 		return fmt.Errorf("%w: no actions", ErrNotFinalized)
+	}
+	// 정규형이 모호한 계획(문자열 속 NUL)은 승인 검증과 상관없이 막는다. 승인을 확인하지 않는 경로
+	// (--allow-unverified-approvals)도 여기는 지나므로, 그런 계획이 생성기로 넘어가지 않는다.
+	if err := sign.CheckPlanText(p); err != nil {
+		return err
 	}
 	// 절차만 보고 내용을 안 보면, **확정 도장은 찍혔는데 실행할 수 없는 계획**이 게이트를 지난다.
 	// 상태·서명·건수는 계획이 어떻게 만들어졌는지에 대한 것이고, 아래는 그 계획으로 무엇을
