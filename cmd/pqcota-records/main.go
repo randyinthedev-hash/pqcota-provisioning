@@ -52,6 +52,9 @@ func main() {
 		}
 		if b := r.GetBefore(); b != nil && len(b.GetModules()) > 0 {
 			fmt.Printf("    before : %s\n", strings.Join(b.GetModules(), ", "))
+		} else {
+			// 빈 before는 캡처하지 못한 것이다. 「그 앱에 암호 모듈이 없었다」로 읽히지 않게 그렇게 적는다.
+			fmt.Printf("    before : (nothing captured — not evidence that the app had no crypto configuration)\n")
 		}
 		// 어느 스냅샷 상태에서 나온 조치인지 — 되짚는 사슬의 마지막 고리. 찾은 것과 못 찾은 것을 가려 낸다.
 		for _, sr := range r.GetSnapshotResolutions() {

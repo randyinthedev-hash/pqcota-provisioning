@@ -24,6 +24,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	commonv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/common/v1"
+	discoveryv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/discovery/v1"
+	provisioningv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/provisioning/v1"
+	"github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/history"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // countRecords — 이 조직의 레코드 행 수를 DB에서 직접 센다. 읽기 전후의 수가 같음만 보여 주며,
@@ -142,5 +147,113 @@ func TestDSNPathUnderRequiredOrganization(t *testing.T) {
 	_, errOut, code := runProvision(t, prov, envWith("PQCOTA_REQUIRE_ORG=1"), base...)
 	if code == 0 || !strings.Contains(errOut, "no organization was named") {
 		t.Errorf("필수 모드에서 조직을 대지 않았는데 거절되지 않았다(%d):\n%s", code, errOut)
+	}
+}
+
+// recordOf — 이 조직의 레코드 하나를 DB에서 읽는다.
+func recordOf(t *testing.T, dsn, organization, id string) *provisioningv1.ProvisioningRecord {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	var raw []byte
+	if err := pool.QueryRow(context.Background(),
+		`SELECT record FROM pqcota_provisioning_record WHERE org=$1 AND id=$2 ORDER BY seq DESC LIMIT 1`, organization, id).Scan(&raw); err != nil {
+		t.Fatalf("레코드 %s를 읽지 못했다: %v", id, err)
+	}
+	r := &provisioningv1.ProvisioningRecord{}
+	if err := protojson.Unmarshal(raw, r); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func jcaFinding(id string, chain ...string) *discoveryv1.Finding {
+	return &discoveryv1.Finding{Id: id, CryptoRuntime: commonv1.CryptoRuntime_CRYPTO_RUNTIME_JCA,
+		RuntimeAxes: &discoveryv1.Finding_Jca{Jca: &discoveryv1.JcaAxes{ProviderSet: chain}}}
+}
+
+// 기록의 before는 조치의 finding 하나에서만 캡처한다. v0.10.6까지는 노드의 finding 전부를 합쳐, JVM이
+// 여럿이면 다른 앱의 provider 체인이 이어 붙었다(2026-11-10 실제 JVM 넷으로 재현, 체인 25개).
+// 최신 스냅샷에 그 finding이 없으면 비우고, 그렇다고 알리며, 다른 finding으로 대신 채우지 않는다.
+func TestDSNPathCapturesOnlyTheActionsFinding(t *testing.T) {
+	dsn := os.Getenv("PQCOTA_TEST_DSN")
+	if dsn == "" {
+		t.Skip("PQCOTA_TEST_DSN is not set — skipping the Postgres integration test")
+	}
+	prov, recs := buildCLI(t), buildRecords(t)
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
+	organization, node, gone := "pvt-cap-"+suffix, "pvt-cap-node-"+suffix, "pvt-cap-gone-"+suffix
+
+	hist, err := history.NewPgStoreIn(context.Background(), dsn, organization)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ssl := &discoveryv1.Finding{Id: "f-ssl", CryptoRuntime: commonv1.CryptoRuntime_CRYPTO_RUNTIME_OPENSSL,
+		RuntimeAxes: &discoveryv1.Finding_Openssl{Openssl: &discoveryv1.OpensslAxes{Lib: "libssl.so.3", Version: "3.0.13"}}}
+	a, b := jcaFinding("f-jca-a", "SUN", "BC"), jcaFinding("f-jca-b", "SUN", "SunJCE", "SunEC")
+	for _, s := range []*history.Snapshot{
+		{ID: "s1-" + suffix, NodeID: node, RulesetVersion: "pqcota-enrich/v3", Findings: []*discoveryv1.Finding{ssl, a, b}},
+		// gone 노드: 근거 스냅샷에는 f-jca-a가 있고, 그 뒤의 최신 스냅샷에는 없다(다른 finding만 있다)
+		{ID: "g1-" + suffix, NodeID: gone, RulesetVersion: "pqcota-enrich/v3", Findings: []*discoveryv1.Finding{jcaFinding("f-jca-a", "SUN", "BC")}},
+		{ID: "g2-" + suffix, NodeID: gone, RulesetVersion: "pqcota-enrich/v3", Findings: []*discoveryv1.Finding{jcaFinding("f-jca-other", "SUN", "SunEC")}},
+	} {
+		if err := hist.Append(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hist.Close()
+
+	action := func(id, target, snap string) string {
+		return `{"id":"` + id + `","targetNodeId":"` + target + `","findingId":"f-jca-a",
+      "cryptoRuntime":"CRYPTO_RUNTIME_JCA","kind":"REMEDIATION_KIND_PROVIDER_INJECT",
+      "providerChoice":"BC","providerClass":"org.bouncycastle.jce.provider.BouncyCastleProvider",
+      "targetAlgorithm":"ML-KEM (FIPS 203)","automationLevel":"DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL",
+      "evidenceSources":[{"findingId":"f-jca-a","snapshot":{"sourceNodeId":"` + target + `","snapshotId":"` + snap + `"}}]}`
+	}
+	planID := "pvt-cap-plan-" + suffix
+	plan := writePlan(t, `{"id":"`+planID+`","status":"PLAN_STATUS_FINALIZED","scope":"ring-0",
+  "approvalSignatures":["reviewer:test"],"derivedFromSnapshotId":"s1-`+suffix+`","rulesetVersion":"rs-1",
+  "finalizedAt":"2026-11-10T00:00:00Z",
+  "actions":[`+action("a1", node, "s1-"+suffix)+`,`+action("a2", gone, "g1-"+suffix)+`]}`)
+
+	_, errOut, code := runProvision(t, prov, envWith("PQCOTA_ORG="+organization),
+		"--level", "l2", unverified, "--allow-incomplete", "--dsn", dsn, plan)
+	if code != 0 {
+		t.Fatalf("--dsn 실행이 실패했다(%d):\n%s", code, errOut)
+	}
+
+	// 경우 1 — 대상 finding 하나만. 같은 노드의 OpenSSL 모듈도, 다른 JVM의 체인도 섞이지 않는다.
+	got := recordOf(t, dsn, organization, planID+":a1").GetBefore()
+	if chain := strings.Join(got.GetProviderChain(), ","); chain != "SUN,BC" {
+		t.Errorf("a1의 before 체인이 대상 finding의 것이 아니다: %s (want SUN,BC)", chain)
+	}
+	if mods := strings.Join(got.GetModules(), ","); mods != "jca:BC,jca:SUN" {
+		t.Errorf("a1의 before 모듈에 다른 finding이 섞였다: %s (want jca:BC,jca:SUN)", mods)
+	}
+
+	// 경우 2 — 근거 스냅샷 참조는 해결되지만 최신 스냅샷에 finding이 없다. 비우고, 알리고, 대신 채우지 않는다.
+	r2 := recordOf(t, dsn, organization, planID+":a2")
+	if len(r2.GetBefore().GetModules()) > 0 || len(r2.GetBefore().GetProviderChain()) > 0 {
+		t.Errorf("최신 스냅샷에 없는 finding인데 before가 다른 값으로 채워졌다: %v", r2.GetBefore())
+	}
+	if len(r2.GetSnapshotResolutions()) != 1 || r2.GetSnapshotResolutions()[0].GetResolvedSnapshotId() == "" {
+		t.Errorf("근거 스냅샷 참조가 해결되지 않았다(이 경우의 전제가 깨졌다): %v", r2.GetSnapshotResolutions())
+	}
+	if !strings.Contains(r2.GetNote(), "before not captured") {
+		t.Errorf("기록에 캡처하지 못했다는 note가 없다: %q", r2.GetNote())
+	}
+	if !strings.Contains(errOut, "action a2 (node="+gone+"): finding f-jca-a is not in the node's latest snapshot") ||
+		!strings.Contains(errOut, "before not captured 1") {
+		t.Errorf("최신 스냅샷에서 finding을 못 찾았다는 경고나 그 수가 없다:\n%s", errOut)
+	}
+	if strings.Contains(errOut, "action a1 (node="+node+"): finding") {
+		t.Errorf("찾은 finding에도 경고가 났다:\n%s", errOut)
+	}
+	out, recErr, rc := runProvision(t, recs, envWith("PQCOTA_ORG="+organization, "PQCOTA_DSN="+dsn), gone)
+	if rc != 0 || !strings.Contains(out, "before : (nothing captured — not evidence that the app had no crypto configuration)") {
+		t.Errorf("pqcota-records가 빈 before를 「캡처한 것 없음」으로 밝히지 않는다(%d):\n%s%s", rc, out, recErr)
 	}
 }

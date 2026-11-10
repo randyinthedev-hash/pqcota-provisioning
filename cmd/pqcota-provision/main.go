@@ -142,40 +142,50 @@ func main() {
 	}
 	defer recs.Close()
 
-	// 노드별 최신 findings 캐시(before 기준·app_key 부착).
-	byNode := map[string][]*discoveryv1.Finding{}
-	findingByID := map[string]*discoveryv1.Finding{}
-	load := func(node string) []*discoveryv1.Finding {
-		if fs, ok := byNode[node]; ok {
-			return fs
+	// 노드별 최신 스냅샷의 finding을 id로 찾는다(before 기준·app_key 부착). 노드마다 따로 둔다 —
+	// 다른 노드의 같은 id로 대신하지 않는다.
+	byNode := map[string]map[string]*discoveryv1.Finding{}
+	load := func(node string) map[string]*discoveryv1.Finding {
+		if m, ok := byNode[node]; ok {
+			return m
 		}
 		snap, err := hist.Latest(node)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "reading history:", err)
 			os.Exit(1)
 		}
-		var fs []*discoveryv1.Finding
+		m := map[string]*discoveryv1.Finding{}
 		if snap != nil {
-			fs = snap.Findings
-			for _, f := range fs {
-				findingByID[f.GetId()] = f
+			for _, f := range snap.Findings {
+				m[f.GetId()] = f
 			}
 		}
-		byNode[node] = fs
-		return fs
+		byNode[node] = m
+		return m
 	}
 
 	n := 0
-	resolved, unresolved := 0, 0
+	resolved, unresolved, uncaptured := 0, 0, 0
 	for _, a := range plan.GetActions() {
 		node := a.GetTargetNodeId()
-		before := load(node)
+		// before는 **조치의 finding 하나**에서만 캡처한다. v0.10.6까지는 노드의 finding 전부를 넘겨,
+		// JVM이 여럿이면 다른 앱의 provider 체인이 이 기록에 이어 붙었다.
+		var before []*discoveryv1.Finding
 		var appKeys []string // 근거 Finding의 자산이 어느 앱 것인지(§1.5) — 공유 .so면 다중
-		if f := findingByID[a.GetFindingId()]; f != nil {
+		f := load(node)[a.GetFindingId()]
+		if f != nil {
+			before = []*discoveryv1.Finding{f}
 			appKeys = f.GetAppKeys()
 		}
 		rec := provisioning.NewProvisioningRecord(
 			plan.GetId()+":"+a.GetId(), node, appKeys, plan.GetId(), a, before)
+		if f == nil {
+			// 근거 스냅샷에서는 찾았어도(아래 ResolveAction) 최신 스냅샷에는 없을 수 있다. 그때 before는
+			// 비고, 비었다는 것이 「그 앱에 암호 구성이 없다」는 뜻이 아님을 기록에 남긴다.
+			rec.Note = fmt.Sprintf("before not captured: finding %s is not in the latest snapshot of node %s — an empty before is not evidence that the app has no crypto configuration", a.GetFindingId(), node)
+			fmt.Fprintf(os.Stderr, "⚠ [provision] action %s (node=%s): finding %s is not in the node's latest snapshot — the record's before state is empty (not captured; it does not mean the app has no crypto configuration)\n", a.GetId(), node, a.GetFindingId())
+			uncaptured++
+		}
 		// 스냅샷 참조를 이력에서 **실제로 찾아** 레코드에 남긴다. 제출된 참조와 찾은 id를 한 항목으로
 		// 짝짓는다. 못 찾은 것은 불완전이다 — 원장 연결이 닫히지 않은 것이라 「연결 완료」와 다르다.
 		rec.SnapshotResolutions = provisioning.ResolveAction(hist, plan, a)
@@ -197,7 +207,7 @@ func main() {
 		}
 		n++
 	}
-	fmt.Fprintf(os.Stderr, "[provision] persisted %d records (before capture · STAGED · rollback basis) · snapshot references resolved %d, unresolved %d.\n", n, resolved, unresolved)
+	fmt.Fprintf(os.Stderr, "[provision] persisted %d records (before capture · STAGED · rollback basis) · snapshot references resolved %d, unresolved %d · before not captured %d.\n", n, resolved, unresolved, uncaptured)
 	// 찾지 못한 참조는 불완전이다. 모양이 틀린 것은 reportWarnings가 이미 셌으므로 여기서는 세지 않았다.
 	incomplete += unresolved
 	finish(incomplete, *allowIncomplete)

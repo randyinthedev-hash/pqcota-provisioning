@@ -12,6 +12,9 @@ import (
 
 // CaptureState — 앱의 현재 크립토 상태(롤백 before 기준)를 findings에서 요약한다(프로비저닝 설계 §6A).
 // openssl은 lib@version, JCA는 provider 목록을 모듈로. 프로비저닝 *전* 이걸 보존해 롤백 근거로 삼는다.
+//
+// 넘기는 것은 **조치의 대상 finding**이다. 받은 finding을 모두 한 상태로 합치므로, 노드의 finding
+// 전부를 넘기면 다른 앱의 모듈과 provider 체인이 섞인다(v0.10.6까지 pqcota-provision이 그랬다).
 func CaptureState(findings []*discoveryv1.Finding) *provisioningv1.CryptoState {
 	seen := map[string]bool{}
 	var modules, chain []string
