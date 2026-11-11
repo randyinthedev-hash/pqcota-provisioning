@@ -37,22 +37,27 @@ import (
 	provisioningv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/provisioning/v1"
 	"github.com/randyinthedev-hash/pqcota-common/pkg/kernel/sign"
 	"github.com/randyinthedev-hash/pqcota-common/pkg/org"
+	"github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/history"
 	sestore "github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/sourceevidence/store"
 	"github.com/randyinthedev-hash/pqcota-provisioning/pkg/provisioning"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 func main() {
 	approver := flag.String("approver", "", "approver id — it goes inside the signature so verification is bound to this person")
-	dsn := flag.String("dsn", "", "Postgres DSN of the source evidence store (read-only); required when an action is based only on source evidence")
+	dsn := flag.String("dsn", "", "Postgres DSN (read-only) for the source evidence store and the history; required when an action is based only on source evidence or a guide was chosen for some evidence")
+	guideDir := flag.String("guide-dir", "", "local guide catalog; required when the plan names a guide — every guide is checked by hash before signing")
+	review := flag.Bool("review", false, "do not sign: print what would be approved — evidence, guides, the confirmed purpose and the verified guide bodies — and exit 0 if it could be signed")
 	flag.Parse()
-	if flag.NArg() < 1 || *approver == "" {
-		fmt.Fprintln(os.Stderr, "usage: pqcota-approve --approver <id> [--dsn <postgres-dsn>] <plan.json>   (env PQCOTA_APPROVAL_KEY = base64 ed25519 private key)")
+	if flag.NArg() < 1 || (*approver == "" && !*review) {
+		fmt.Fprintln(os.Stderr, "usage: pqcota-approve --approver <id> [--dsn <postgres-dsn>] [--guide-dir <dir>] <plan.json>   (env PQCOTA_APPROVAL_KEY = base64 ed25519 private key)")
+		fmt.Fprintln(os.Stderr, "       pqcota-approve --review [--dsn <postgres-dsn>] [--guide-dir <dir>] <plan.json>")
 		os.Exit(2)
 	}
 
 	key := os.Getenv("PQCOTA_APPROVAL_KEY")
-	if key == "" {
+	if key == "" && !*review {
 		fmt.Fprintln(os.Stderr, "PQCOTA_APPROVAL_KEY is not set — there is no key to approve with. Generate one with pqcota-keygen.")
 		os.Exit(2)
 	}
@@ -70,37 +75,43 @@ func main() {
 
 	// 승인 대상인지 보고, 첫 승인이면 상태를 올린다. **서명보다 먼저** — 서명이 상태를 덮는다.
 	first := plan.GetStatus() == provisioningv1.PlanStatus_PLAN_STATUS_IN_REVIEW
-	if err := provisioning.PrepareApproval(plan, time.Now()); err != nil {
+	// --review는 같은 구조 검사를 사본에 한다 — 들어온 계획의 상태·시각을 바꾸지 않은 채 보여 준다.
+	target := plan
+	if *review {
+		target = proto.Clone(plan).(*provisioningv1.FinalizedPlan)
+	}
+	if err := provisioning.PrepareApproval(target, time.Now()); err != nil {
 		fmt.Fprintln(os.Stderr, "refusing to approve:", err)
 		os.Exit(1)
 	}
 
-	// 소스 근거 — 서명 **전에** 해석한다. 소스 근거만 있는 조치는 그것이 유일한 근거라, 하나라도 못 찾으면
-	// 서명하지 않는다(승인자가 보지 못한 근거에 책임을 질 수 없다). 그런 조치가 있으면 저장소 연결이 필요하다 —
-	// 없으면 해석할 수 없으므로 같은 거부다. 혼합 근거 조치의 미해결은 알리기만 한다.
-	if provisioning.PlanHasSourceEvidence(plan) {
-		var lookup provisioning.SourceEvidenceLookup
-		if *dsn != "" {
-			st, err := sestore.OpenPgStoreIn(context.Background(), *dsn, org.FromEnv())
-			if err != nil {
-				lookup = provisioning.FailingSourceLookup{Err: fmt.Errorf("could not open the source evidence store: %w", err)}
-			} else {
-				defer st.Close()
-				lookup = st
-			}
-		}
-		check, err := provisioning.CheckSourceEvidence(lookup, plan)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "refusing to approve:", err)
-			if *dsn == "" {
-				fmt.Fprintln(os.Stderr, "(an action based only on source evidence must resolve before it is approved — give --dsn for the source evidence store)")
+	// 근거와 가이드 — 서명 **전에** 본다. 승인자는 볼 수 있는 것에만 책임을 진다.
+	//   - 소스 근거만 있는 조치의 참조가 하나라도 미해결이면 서명하지 않는다(단위 B).
+	//   - 가이드는 하나라도 카탈로그와 맞지 않거나, 가이드가 고른 근거(런타임·소스)를 해석하지 못하면 서명하지 않는다.
+	//     조치 종류와 상관없다 — 볼 수 없는 가이드에 승인하지 않는다.
+	summary, bodies, problems := reviewPlan(plan, *dsn, *guideDir)
+	if *review {
+		fmt.Print(summary)
+		fmt.Print(bodies)
+		if len(problems) > 0 {
+			fmt.Fprintln(os.Stderr, "✗ [approve] this plan would not be signed:")
+			for _, p := range problems {
+				fmt.Fprintln(os.Stderr, "  "+p)
 			}
 			os.Exit(1)
 		}
-		for _, w := range check.Incomplete(plan) {
-			fmt.Fprintln(os.Stderr, "⚠ [approve] "+w)
-		}
+		fmt.Fprintln(os.Stderr, "[approve] review only — nothing was signed. This plan can be signed.")
+		return
 	}
+	if len(problems) > 0 {
+		fmt.Fprintln(os.Stderr, "refusing to approve:")
+		for _, p := range problems {
+			fmt.Fprintln(os.Stderr, "  "+p)
+		}
+		os.Exit(1)
+	}
+	// 서명할 때도 무엇에 서명하는지 stderr에 낸다. 본문 전문은 --review에서 본 것이라 경로와 해시만 낸다.
+	fmt.Fprint(os.Stderr, summary)
 
 	sig, err := sign.SignApproval(key, *approver, plan)
 	if err != nil {
@@ -121,4 +132,53 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "[approve] %s %s plan %q (%d actions, %d approval(s)). The approval covers every field except the signatures themselves — editing the plan after this invalidates it.\n",
 		*approver, what, plan.GetId(), len(plan.GetActions()), len(plan.GetApprovalSignatures()))
+}
+
+// reviewPlan — 승인 전에 볼 것과, 서명하지 않을 이유. 저장소·이력은 조회 전용으로 연다.
+func reviewPlan(plan *provisioningv1.FinalizedPlan, dsn, guideDir string) (summary, bodies string, problems []string) {
+	var src provisioning.SourceEvidenceCheck
+	if provisioning.PlanHasSourceEvidence(plan) {
+		var lookup provisioning.SourceEvidenceLookup
+		if dsn != "" {
+			st, err := sestore.OpenPgStoreIn(context.Background(), dsn, org.FromEnv())
+			if err != nil {
+				lookup = provisioning.FailingSourceLookup{Err: fmt.Errorf("could not open the source evidence store: %w", err)}
+			} else {
+				defer st.Close()
+				lookup = st
+			}
+		}
+		var err error
+		src, err = provisioning.CheckSourceEvidence(lookup, plan)
+		if err != nil {
+			problems = append(problems, err.Error())
+			if dsn == "" {
+				problems = append(problems, "(an action based only on source evidence must resolve before it is approved — give --dsn for the source evidence store)")
+			}
+		}
+		for _, w := range src.Incomplete(plan) {
+			fmt.Fprintln(os.Stderr, "⚠ [approve] "+w)
+		}
+	}
+	var guides provisioning.GuideCheck
+	if provisioning.PlanHasGuide(plan) {
+		var hist history.SnapshotLookup
+		if provisioning.PlanGuideChoosesRuntime(plan) && dsn != "" {
+			h, err := history.OpenPgStoreIn(context.Background(), dsn, org.FromEnv())
+			if err != nil {
+				problems = append(problems, "could not open the history to check the runtime evidence a guide was chosen for: "+err.Error())
+			} else {
+				defer h.Close()
+				hist = h
+			}
+		}
+		guides, _ = provisioning.CheckGuides(plan, guideDir, src, hist)
+		for ai, a := range plan.GetActions() {
+			if g := guides.Of(ai); g != nil && !g.Resolved {
+				problems = append(problems, fmt.Sprintf("action[%d] %s: guide %s revision %s does not resolve — %s",
+					ai, a.GetId(), g.Selection.GetGuideId(), g.Selection.GetRevision(), g.Reason))
+			}
+		}
+	}
+	return provisioning.ReviewSummary(plan, src, guides), provisioning.ReviewBodies(guides), problems
 }

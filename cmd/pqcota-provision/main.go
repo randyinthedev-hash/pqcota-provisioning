@@ -17,6 +17,7 @@
 //		--dsn 지정 시: 히스토리에서 before-findings를 읽어 레코드를 캡처·영속(같은 저장소).
 //		소스 근거(source_evidence)가 있으면 출력 전에 소스 근거 저장소(조회 전용, 같은 DSN)에서 해석한다.
 //		소스 근거만 있는 조치가 해석되지 않으면(--dsn이 없어도) 플레이북도 기록도 내지 않고 거부한다.
+//		--guide-dir: 계획의 가이드를 로컬 판별 카탈로그와 해시로 대조한다. 승인 서명을 검증한 실행에서만 「approved guide」로 적는다.
 //		             이력과 레코드는 env PQCOTA_ORG가 가리키는 같은 조직에 묶인다.
 //		미지정 시: 플레이북만 stdout(레코드 없음).
 //		env PQCOTA_APPROVAL_KEYS   : `<승인자>=<base64 공개키>` 콤마 구분. 승인 서명을 **그 승인자의
@@ -51,11 +52,12 @@ func main() {
 	levelFlag := flag.String("level", "l2", "automation level: l1 (stage only) | l2 (through install) | l3 (through activation and restart, using the plan's activation hooks)")
 	rollbackFlag := flag.Bool("rollback", false, "generate the reverse (rollback) playbook — removes the files the forward run staged")
 	dsn := flag.String("dsn", "", "Postgres DSN for history and records; when given, captures the before state and persists it")
+	guideDir := flag.String("guide-dir", "", "local guide catalog (<name>/<revision>/guide.json + body + examples); guides in the plan are checked against it by hash")
 	allowIncomplete := flag.Bool("allow-incomplete", false, "exit 0 even when the plan is incomplete (the playbook is generated either way; without this the exit status is 3)")
 	allowUnverified := flag.Bool("allow-unverified-approvals", false, "go on when there is no PQCOTA_APPROVAL_KEYS to check the plan's approvals with (default: refuse)")
 	flag.Parse()
 	if flag.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] <plan.json>")
+		fmt.Fprintln(os.Stderr, "usage: pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] [--guide-dir <dir>] <plan.json>")
 		os.Exit(2)
 	}
 
@@ -90,7 +92,8 @@ func main() {
 
 	// 승인 서명 검증(§3.3③) — Executable은 서명의 **개수**만 센다. 값이 맞는지, 누구 것인지는
 	// 여기서 본다. 키 묶음이 없으면 확인할 수 없으므로 **확인했다고 하지 않는다**(§2.6).
-	if err := checkApprovals(plan, *allowUnverified); err != nil {
+	approvalsVerified, err := checkApprovals(plan, *allowUnverified)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "refused:", err)
 		os.Exit(1)
 	}
@@ -118,18 +121,31 @@ func main() {
 		fmt.Fprintln(os.Stderr, "refused:", err)
 		os.Exit(1)
 	}
+	// 가이드 — 소스 근거 다음, 여전히 첫 출력 전. 카탈로그와 해시로 대조하고, 가이드가 고른 런타임 근거는 이력에서 지금 찾는다
+	// (다른 런타임 참조는 지금처럼 기록 단계에서 찾는다).
+	guides, err := checkGuides(plan, *guideDir, *dsn, srcCheck)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "refused:", err)
+		os.Exit(1)
+	}
 
 	// (1) 플레이북 — stdout. --rollback이면 역방향(배치 파일 제거), 아니면 forward.
 	if *rollbackFlag {
 		fmt.Print(provisioning.GenerateRollbackPlaybook(plan, level))
 	} else {
-		fmt.Print(provisioning.GenerateProvisioningPlaybookWithSource(plan, level, srcCheck.Notes()))
+		fmt.Print(provisioning.GenerateProvisioningPlaybookWithSource(plan, level,
+			provisioning.MergeNotes(srcCheck.Notes(), guides.Notes(approvalsVerified))))
 	}
 
 	// (2) 계획이 모자라 산출물이나 이력이 불완전해지는 자리를 알린다.
 	incomplete := reportWarnings(plan, level, *rollbackFlag)
 	// 혼합 근거 조치에서 해석하지 못한 소스 근거 — 그 근거에 기대는 안내는 빠졌다. 불완전이다.
 	for _, w := range srcCheck.Incomplete(plan) {
+		fmt.Fprintln(os.Stderr, "⚠ [provision] "+w)
+		incomplete++
+	}
+	// 가이드를 대조하지 못한 조치 — 그 가이드에 기대는 안내는 빠졌다. 불완전이다.
+	for _, w := range guides.Incomplete(plan) {
 		fmt.Fprintln(os.Stderr, "⚠ [provision] "+w)
 		incomplete++
 	}
@@ -202,6 +218,9 @@ func main() {
 		// 소스 근거를 찾은 결과 — 소스 근거가 있는 조치에서만 채운다(없는 조치의 기록 JSON은 그대로).
 		for _, r := range srcCheck.Of(ai) { // 순번으로 — id가 겹쳐도 다른 조치의 결과가 붙지 않는다
 			rec.SourceEvidenceResolutions = append(rec.SourceEvidenceResolutions, r.Proto())
+		}
+		if g := guides.Of(ai); g != nil {
+			rec.GuideResolution = g.Proto(approvalsVerified)
 		}
 		switch {
 		case f == nil && provisioning.SourceOnly(a):
@@ -323,14 +342,16 @@ func finish(incomplete int, allow bool) {
 // 알고 여는 길은 남긴다: --allow-unverified-approvals. 키 배포 전에 산출물만 보려는 자리가
 // 실제로 있고, 막아 버리면 그 사람은 서명 자체를 지우는 쪽으로 간다. 다만 **적어야 열린다.**
 // PQCOTA_REQUIRE_APPROVAL=1은 그대로 받는다(이제 기본과 같은 뜻이다) — 지우지 않고 더한다.
-func checkApprovals(plan *provisioningv1.FinalizedPlan, allowUnverified bool) error {
+// checkApprovals — 승인 서명을 확인한다. verified는 등록된 키로 하나 이상 확인했는가다. 확인을 끈 경로(키 없음 +
+// --allow-unverified-approvals)는 verified=false로 통과한다 — 그때는 가이드를 「승인한 가이드」라고 적지 않는다.
+func checkApprovals(plan *provisioningv1.FinalizedPlan, allowUnverified bool) (verified bool, err error) {
 	keys, err := sign.ParseKeyMap(os.Getenv("PQCOTA_APPROVAL_KEYS"))
 	if err != nil {
-		return fmt.Errorf("PQCOTA_APPROVAL_KEYS: %w", err)
+		return false, fmt.Errorf("PQCOTA_APPROVAL_KEYS: %w", err)
 	}
 	if len(keys) == 0 {
 		if !allowUnverified {
-			return fmt.Errorf("no PQCOTA_APPROVAL_KEYS, so the %d approval entr(ies) on this plan cannot be checked — "+
+			return false, fmt.Errorf("no PQCOTA_APPROVAL_KEYS, so the %d approval entr(ies) on this plan cannot be checked — "+
 				"an approval nobody can verify shows nothing about who took responsibility (§3.3③). "+
 				"Register the approver's key, or pass --allow-unverified-approvals to go on knowing that",
 				len(plan.GetApprovalSignatures()))
@@ -338,7 +359,7 @@ func checkApprovals(plan *provisioningv1.FinalizedPlan, allowUnverified bool) er
 		fmt.Fprintf(os.Stderr, "⚠ [provision] approval signatures: **not checked** — no PQCOTA_APPROVAL_KEYS to check them with. %d entries were counted, not verified.\n",
 			len(plan.GetApprovalSignatures()))
 		fmt.Fprintln(os.Stderr, "           you passed --allow-unverified-approvals, so this is a choice, not an oversight.")
-		return nil
+		return false, nil
 	}
 
 	chk := sign.VerifyApprovals(keys, plan)
@@ -351,14 +372,14 @@ func checkApprovals(plan *provisioningv1.FinalizedPlan, allowUnverified bool) er
 		for _, r := range chk.Rejected {
 			names = append(names, r.String())
 		}
-		return fmt.Errorf("approval signatures did not check out: %s. A plan carrying an approval that is not the approver's is worse than one carrying none (§3.3③)",
+		return false, fmt.Errorf("approval signatures did not check out: %s. A plan carrying an approval that is not the approver's is worse than one carrying none (§3.3③)",
 			strings.Join(names, ", "))
 	}
 	if len(chk.Approved) == 0 {
-		return fmt.Errorf("no approval on this plan could be verified with the registered keys, so nothing shows who approved it (§3.3③)")
+		return false, fmt.Errorf("no approval on this plan could be verified with the registered keys, so nothing shows who approved it (§3.3③)")
 	}
 	fmt.Fprintf(os.Stderr, "[provision] approvals verified: %s\n", strings.Join(chk.Approved, ", "))
-	return nil
+	return true, nil
 }
 
 // checkSource — 계획의 소스 근거를 출력 전에 해석한다. 소스 근거가 없으면 아무것도 열지 않는다.
@@ -378,4 +399,22 @@ func checkSource(plan *provisioningv1.FinalizedPlan, dsn string) (provisioning.S
 		}
 	}
 	return provisioning.CheckSourceEvidence(lookup, plan)
+}
+
+// checkGuides — 가이드를 출력 전에 대조한다. 가이드가 런타임 근거를 골랐으면 이력을 조회 전용으로 연다(테이블을 만들지 않는다).
+func checkGuides(plan *provisioningv1.FinalizedPlan, dir, dsn string, src provisioning.SourceEvidenceCheck) (provisioning.GuideCheck, error) {
+	if !provisioning.PlanHasGuide(plan) {
+		return nil, nil
+	}
+	var hist history.SnapshotLookup
+	if provisioning.PlanGuideChoosesRuntime(plan) && dsn != "" {
+		h, err := history.OpenPgStoreIn(context.Background(), dsn, org.FromEnv())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "⚠ [provision] could not open the history to check the runtime evidence a guide was chosen for:", err)
+		} else {
+			defer h.Close()
+			hist = h
+		}
+	}
+	return provisioning.CheckGuides(plan, dir, src, hist)
 }

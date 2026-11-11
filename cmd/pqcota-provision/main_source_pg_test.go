@@ -147,6 +147,62 @@ func TestSourceEvidenceWithDSN(t *testing.T) {
 	}
 }
 
+// 소스 근거만 있는 조치의 가이드: 맞으면 출력·기록에 대조 결과, 틀리면 계획 전체를 출력 전에 거부(기록 0).
+// 런타임 근거를 고른 가이드는 --dsn으로 이력을 출력 전에 조회하고, 못 찾으면 가이드만 빠진다.
+func TestGuideWithDSN(t *testing.T) {
+	dsn := os.Getenv("PQCOTA_TEST_DSN")
+	if dsn == "" {
+		t.Skip("PQCOTA_TEST_DSN is not set — skipping the Postgres integration test")
+	}
+	bin := buildCLI(t)
+	stamp := strconv.FormatInt(time.Now().UnixNano(), 36)
+	orgName := "pvt-guide-" + stamp
+	in := storeEvidence(t, dsn, orgName, stamp)
+	item := in.Items[0].ID
+	env := envWith("PQCOTA_ORG=" + orgName)
+	dir, body, man := guideCatalog(t)
+	srcOnly := func(id, b string) string {
+		p := strings.Replace(srcPlan(in.ID, item, in.InputSHA256), `"inputSha256":"`+in.InputSHA256+`"}]}`,
+			`"inputSha256":"`+in.InputSHA256+`"}],`+guideJSON(b, man, `,"sourceEvidenceIndexes":[0]`)+`}`, 1)
+		return writePlan(t, strings.Replace(p, `"t-src"`, `"`+id+`"`, 1))
+	}
+
+	okID := "g-ok-" + stamp
+	out, errOut, code := runProvision(t, bin, env, "--level", "l2", unverified, "--dsn", dsn, "--guide-dir", dir, "--allow-incomplete", srcOnly(okID, body))
+	if code != 0 || !strings.Contains(out, "# action a2 guide named in the plan") || !strings.Contains(out, "chosen for: [source 0] RSA (/components/0)") {
+		t.Fatalf("source-only guide: exit %d\n%s\n%s", code, out, errOut)
+	}
+	recs := recordsOfPlan(t, dsn, orgName, okID)
+	if len(recs) != 2 || strings.Contains(recs[0], "guideResolution") || !strings.Contains(recs[1], `"guideResolution":{`) ||
+		!strings.Contains(recs[1], `"resolved":true`) || strings.Contains(recs[1], `"approvalsVerified":true`) {
+		t.Fatalf("records:\n%s", strings.Join(recs, "\n"))
+	}
+
+	badID := "g-bad-" + stamp
+	for _, extra := range [][]string{nil, {"--rollback"}} {
+		args := append([]string{"--level", "l2", unverified, "--dsn", dsn, "--guide-dir", dir}, extra...)
+		out, errOut, code = runProvision(t, bin, env, append(args, srcOnly(badID, strings.Repeat("0", 64)))...)
+		if code != 1 || out != "" || !strings.Contains(errOut, "names a guide that does not resolve") || !strings.Contains(errOut, "body hash differs") {
+			t.Fatalf("%v bad guide: exit %d, stdout %d bytes\n%s", extra, code, len(out), errOut)
+		}
+	}
+	if n := len(recordsOfPlan(t, dsn, orgName, badID)); n != 0 {
+		t.Fatalf("a refused run left %d records", n)
+	}
+
+	// 런타임 근거를 고른 가이드 — 이력에 그 스냅샷이 없다 → 가이드만 빠지고 불완전, 사유가 기록에.
+	rtID := "g-rt-" + stamp
+	rt := strings.Replace(planWithGuide(body, man, `,"evidenceSourceIndexes":[0]`), `"automationLevel":"DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL"}`,
+		`"automationLevel":"DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL","evidenceSources":[{"findingId":"f1","snapshot":{"sourceNodeId":"n1","snapshotId":"no-such-`+stamp+`"}}]}`, 1)
+	out, errOut, code = runProvision(t, bin, env, "--level", "l2", unverified, "--dsn", dsn, "--guide-dir", dir, writePlan(t, strings.Replace(rt, `"t-ok"`, `"`+rtID+`"`, 1)))
+	if code != 3 || !strings.Contains(out, "guide not given") || !strings.Contains(errOut, "[runtime 0]) did not resolve") {
+		t.Fatalf("runtime evidence: exit %d\n%s\n%s", code, out, errOut)
+	}
+	if r := recordsOfPlan(t, dsn, orgName, rtID); len(r) != 1 || !strings.Contains(r[0], "did not resolve") {
+		t.Fatalf("runtime record: %v", r)
+	}
+}
+
 // recordsOfPlan — 한 계획의 기록을 쓴 순서대로(공백 없는 JSON).
 func recordsOfPlan(t *testing.T, dsn, organization, planID string) []string {
 	t.Helper()

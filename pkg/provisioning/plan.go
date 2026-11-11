@@ -87,6 +87,10 @@ func actionable(p *provisioningv1.FinalizedPlan) error {
 			return fmt.Errorf("%w: %s (node=%s) is based only on source evidence, but kind=%s changes the runtime — it needs runtime evidence (finding_id / evidence_sources). Source evidence alone is accepted only for APP_RECONFIG and REBUILD",
 				ErrNotActionable, where, a.GetTargetNodeId(), a.GetKind())
 		}
+		// 가이드의 모양(카탈로그 없이 볼 수 있는 것). 틀린 가이드에 승인하면 무엇을 승인했는지 말할 수 없다.
+		if err := guideShape(a); err != nil {
+			return fmt.Errorf("%w: %s (node=%s): %v", ErrNotActionable, where, a.GetTargetNodeId(), err)
+		}
 	}
 	return nil
 }
