@@ -132,18 +132,17 @@ func TestSourceEvidenceWithDSN(t *testing.T) {
 		t.Errorf("mixed record: %s", r)
 	}
 
-	// 4. id가 같은 두 조치(a1) — 첫째는 런타임 근거만, 둘째는 소스 근거만. 기록은 각자의 것을 갖는다.
+	// 4. id가 같은 두 조치(a1) — v0.11.0부터 계획 자체를 거부한다(조치 id는 계획 전체에서 고유). 출력도 기록도 없다.
+	//    소스 근거 결과를 순번으로 잇는 것은 pkg 시험(TestSourceEvidenceFollowsActionPositionNotID)이 그대로 본다.
 	dupID := "src-dup-" + stamp
 	dup := strings.Replace(srcPlan(in.ID, item, in.InputSHA256), `"id":"a2"`, `"id":"a1"`, 1)
 	p = writePlan(t, strings.Replace(dup, `"t-src"`, `"`+dupID+`"`, 1))
 	out, errOut, code = runProvision(t, bin, env, "--level", "l2", unverified, "--dsn", dsn, "--allow-incomplete", p)
-	if code != 0 || strings.Count(out, "source evidence (reported locations") != 1 {
+	if code != 1 || out != "" || !strings.Contains(errOut, `share the id "a1"`) {
 		t.Fatalf("duplicate ids: exit %d\n%s\n%s", code, out, errOut)
 	}
-	recs := recordsOfPlan(t, dsn, orgName, dupID)
-	if len(recs) != 2 || strings.Contains(recs[0], "sourceEvidenceResolutions") || !strings.Contains(recs[1], `"resolved":true`) ||
-		!strings.Contains(recs[1], "before not applicable") || strings.Contains(recs[0], "before not applicable") {
-		t.Fatalf("records of two actions sharing an id are mixed:\n%s", strings.Join(recs, "\n"))
+	if recs := recordsOfPlan(t, dsn, orgName, dupID); len(recs) != 0 {
+		t.Fatalf("a refused plan left %d records", len(recs))
 	}
 }
 

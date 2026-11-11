@@ -4,6 +4,7 @@
   "rulesetVersion": "rs-2026.09",
   "actions": [
     {
+      "id": "a1",
       "targetNodeId": "node-a",
       "cryptoRuntime": "CRYPTO_RUNTIME_OPENSSL",
       "kind": "REMEDIATION_KIND_PROVIDER_INJECT",
@@ -12,6 +13,7 @@
       "configArtifact": "[provider_sect]\noqsprovider = oqs_sect\n[oqs_sect]\nactivate = 1"
     },
     {
+      "id": "a2",
       "targetNodeId": "node-b",
       "cryptoRuntime": "CRYPTO_RUNTIME_JCA",
       "kind": "REMEDIATION_KIND_PROVIDER_INJECT",

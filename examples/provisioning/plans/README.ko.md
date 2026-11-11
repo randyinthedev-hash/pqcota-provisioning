@@ -63,7 +63,7 @@ PQCOTA_APPROVAL_KEYS="reviewer-1=$PQCOTA_VERIFY_KEY" \
 
 | 필드 | 필수 | 하는 일 |
 |---|---|---|
-| `id` | ✅ | 액션 식별자입니다. 경고 메시지가 이 값으로 어느 액션인지 가리킵니다 |
+| `id` | ✅ | 액션 식별자입니다. **비어 있으면 안 되고, 노드가 달라도 계획 전체에서 고유해야 합니다.** config 경로와 기록 id가 이 값에서 나오므로, 예전에는 id가 같은 두 액션에서 둘째 액션의 config가 아무 말 없이 빠졌습니다. 이 조건을 어긴 계획은 승인과 생성에서 거부합니다. 경고 메시지도 이 값으로 어느 액션인지 가리킵니다 |
 | `targetNodeId` | ✅ | 이 액션이 가는 노드입니다. 플레이북의 `hosts:`가 됩니다. **비어 있으면 거부합니다.** 빈 항목은 아무 데도 닿지 않는 플레이를 만들기 때문입니다 |
 | `findingId` | | 근거가 되는 관측입니다. 인벤토리의 자산과 이어집니다. 비어 있으면 경고합니다 |
 | `evidenceSources[]` | | **이 액션의 근거**: 어느 발견 항목이 어느 스냅샷 상태에서 왔는지입니다. `{findingId, snapshot: {sourceNodeId, snapshotId \| content: {formatVersion, digest, rulesetVersion}}}`. `sourceNodeId`는 이력이 그 스냅샷을 저장한 이름(봉투의 노드)이므로 `targetNodeId`와 다를 수 있습니다. 보통 하나이며 주된 근거가 먼저 옵니다. **모양이 잘못되면 `--dsn` 없이도 불완전(종료 3)이고**, `--dsn`을 주면 생성기가 이력에서 실제로 찾아 기록에 남깁니다. 찾지 못하거나 찾은 스냅샷에 그 발견 항목이 없어도 불완전입니다. 내용 지문 형식은 [`openssl-3.5-config-only`](openssl-3.5-config-only.json)가 보여 줍니다 |

@@ -22,6 +22,7 @@ func TestExecutable(t *testing.T) {
 			Status:             provisioningv1.PlanStatus_PLAN_STATUS_FINALIZED,
 			ApprovalSignatures: []string{"ed25519:abc"},
 			Actions: []*provisioningv1.RemediationAction{{
+				Id:           "a1",
 				TargetNodeId: "web-01",
 				Kind:         provisioningv1.RemediationKind_REMEDIATION_KIND_CONFIG_ONLY,
 			}},

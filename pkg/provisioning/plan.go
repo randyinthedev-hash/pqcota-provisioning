@@ -67,6 +67,20 @@ func Executable(p *provisioningv1.FinalizedPlan) error {
 // 계획에 서명이 붙으면 **승인은 됐는데 실행할 수 없는 계획**이 생기기 때문이다 — 그것은
 // 승인자가 책임진 것이 무엇인지 말할 수 없는 상태다.
 func actionable(p *provisioningv1.FinalizedPlan) error {
+	// 조치 id는 비어 있지 않고 **계획 전체에서** 고유해야 한다(v0.11.0). 배치 경로와 실행 기록 id(plan_id:action_id)가
+	// 조치 id에서 나오므로, id가 겹치면 둘째 조치의 config가 플레이북에서 알리지 않고 빠지고 실행은 성공으로 끝났다
+	// (pqcota-test-reports/2026-duplicate-action-id/). 노드가 달라도 기록 id가 겹치므로 노드와 상관없이 본다.
+	seen := map[string]int{}
+	for i, a := range p.GetActions() {
+		if a.GetId() == "" {
+			return fmt.Errorf("%w: action[%d] (node=%s) has no id — every action needs an id that is unique in the plan", ErrNotActionable, i, a.GetTargetNodeId())
+		}
+		if j, dup := seen[a.GetId()]; dup {
+			return fmt.Errorf("%w: action[%d] and action[%d] share the id %q (nodes %s, %s) — action ids must be unique in the plan, because config paths and record ids come from them",
+				ErrNotActionable, j, i, a.GetId(), p.GetActions()[j].GetTargetNodeId(), a.GetTargetNodeId())
+		}
+		seen[a.GetId()] = i
+	}
 	for i, a := range p.GetActions() {
 		where := fmt.Sprintf("action[%d] id=%q", i, a.GetId())
 		if a.GetTargetNodeId() == "" {

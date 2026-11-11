@@ -63,7 +63,7 @@ What splits them is `kind` (the remediation type) and `cryptoRuntime`. Fill in o
 
 | Field | Required | What it does |
 |---|---|---|
-| `id` | ✅ | the action identifier. A warning message uses this value to point at which action |
+| `id` | ✅ | the action identifier. **It must not be empty and must be unique in the whole plan**, across nodes too: config paths and record ids come from it, so two actions with one id used to drop the second action's config without a word. A plan that breaks this is refused at approval and at generation. Warning messages use this value to point at which action |
 | `targetNodeId` | ✅ | the node this action goes to. It becomes the playbook's `hosts:`. **It is refused if empty**, since an empty entry would produce a play that reaches nowhere |
 | `findingId` | | the observation it is based on. It links to an asset in the inventory. It warns if empty |
 | `evidenceSources[]` | | **the evidence for this action**: which finding came from which snapshot state. `{findingId, snapshot: {sourceNodeId, snapshotId \| content: {formatVersion, digest, rulesetVersion}}}`. `sourceNodeId` is the name under which the history stored that snapshot (the envelope's node), so it may differ from `targetNodeId`. There is usually one, with the primary evidence first. **If the shape is wrong it is incomplete (exit 3) even without `--dsn`**, and with `--dsn` the generator actually looks it up in the history and leaves it on the record. It is also incomplete if it cannot be found, or if the snapshot found does not contain that finding. [`openssl-3.5-config-only`](openssl-3.5-config-only.json) shows the content-fingerprint form |
