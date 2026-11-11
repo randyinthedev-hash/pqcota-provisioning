@@ -14,9 +14,10 @@
 // 상태와 확정 시각은 **서명 전에** 정한다. 서명이 그 둘을 덮으므로, 뒤에 바꾸면 방금 만든
 // 서명이 깨진다. 두 번째 승인부터는 아무것도 바꾸지 않고 서명만 더한다.
 //
-// usage: pqcota-approve --approver <id> <plan.json>
+// usage: pqcota-approve --approver <id> [--dsn <postgres-dsn>] <plan.json>
 //
 //	--approver <id>          : 승인자 id. ':'는 쓸 수 없다(서명 문자열의 구분자)
+//	--dsn <dsn>              : 소스 근거 저장소(조회 전용). 소스 근거만 있는 조치가 있으면 필수 — 서명 전에 해석한다
 //	env PQCOTA_APPROVAL_KEY  : base64 ed25519 **개인키**. pqcota-keygen이 낸 것
 //
 // 서명한 계획은 stdout으로 나간다. 원본을 덮어쓰지 않는 이유는, 승인 전 계획과 승인된 계획이
@@ -27,6 +28,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -34,15 +36,18 @@ import (
 
 	provisioningv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/provisioning/v1"
 	"github.com/randyinthedev-hash/pqcota-common/pkg/kernel/sign"
+	"github.com/randyinthedev-hash/pqcota-common/pkg/org"
+	sestore "github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/sourceevidence/store"
 	"github.com/randyinthedev-hash/pqcota-provisioning/pkg/provisioning"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func main() {
 	approver := flag.String("approver", "", "approver id — it goes inside the signature so verification is bound to this person")
+	dsn := flag.String("dsn", "", "Postgres DSN of the source evidence store (read-only); required when an action is based only on source evidence")
 	flag.Parse()
 	if flag.NArg() < 1 || *approver == "" {
-		fmt.Fprintln(os.Stderr, "usage: pqcota-approve --approver <id> <plan.json>   (env PQCOTA_APPROVAL_KEY = base64 ed25519 private key)")
+		fmt.Fprintln(os.Stderr, "usage: pqcota-approve --approver <id> [--dsn <postgres-dsn>] <plan.json>   (env PQCOTA_APPROVAL_KEY = base64 ed25519 private key)")
 		os.Exit(2)
 	}
 
@@ -68,6 +73,33 @@ func main() {
 	if err := provisioning.PrepareApproval(plan, time.Now()); err != nil {
 		fmt.Fprintln(os.Stderr, "refusing to approve:", err)
 		os.Exit(1)
+	}
+
+	// 소스 근거 — 서명 **전에** 해석한다. 소스 근거만 있는 조치는 그것이 유일한 근거라, 하나라도 못 찾으면
+	// 서명하지 않는다(승인자가 보지 못한 근거에 책임을 질 수 없다). 그런 조치가 있으면 저장소 연결이 필요하다 —
+	// 없으면 해석할 수 없으므로 같은 거부다. 혼합 근거 조치의 미해결은 알리기만 한다.
+	if provisioning.PlanHasSourceEvidence(plan) {
+		var lookup provisioning.SourceEvidenceLookup
+		if *dsn != "" {
+			st, err := sestore.OpenPgStoreIn(context.Background(), *dsn, org.FromEnv())
+			if err != nil {
+				lookup = provisioning.FailingSourceLookup{Err: fmt.Errorf("could not open the source evidence store: %w", err)}
+			} else {
+				defer st.Close()
+				lookup = st
+			}
+		}
+		check, err := provisioning.CheckSourceEvidence(lookup, plan)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "refusing to approve:", err)
+			if *dsn == "" {
+				fmt.Fprintln(os.Stderr, "(an action based only on source evidence must resolve before it is approved — give --dsn for the source evidence store)")
+			}
+			os.Exit(1)
+		}
+		for _, w := range check.Incomplete(plan) {
+			fmt.Fprintln(os.Stderr, "⚠ [approve] "+w)
+		}
 	}
 
 	sig, err := sign.SignApproval(key, *approver, plan)

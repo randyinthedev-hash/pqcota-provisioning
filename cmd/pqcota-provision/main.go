@@ -15,6 +15,8 @@
 //	       [--allow-incomplete] [--allow-unverified-approvals] <plan.json>
 //
 //		--dsn 지정 시: 히스토리에서 before-findings를 읽어 레코드를 캡처·영속(같은 저장소).
+//		소스 근거(source_evidence)가 있으면 출력 전에 소스 근거 저장소(조회 전용, 같은 DSN)에서 해석한다.
+//		소스 근거만 있는 조치가 해석되지 않으면(--dsn이 없어도) 플레이북도 기록도 내지 않고 거부한다.
 //		             이력과 레코드는 env PQCOTA_ORG가 가리키는 같은 조직에 묶인다.
 //		미지정 시: 플레이북만 stdout(레코드 없음).
 //		env PQCOTA_APPROVAL_KEYS   : `<승인자>=<base64 공개키>` 콤마 구분. 승인 서명을 **그 승인자의
@@ -38,6 +40,7 @@ import (
 	"github.com/randyinthedev-hash/pqcota-common/pkg/kernel/sign"
 	"github.com/randyinthedev-hash/pqcota-common/pkg/org"
 	"github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/history"
+	sestore "github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/sourceevidence/store"
 	"github.com/randyinthedev-hash/pqcota-provisioning/pkg/provisioning"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -107,15 +110,29 @@ func main() {
 		os.Exit(2)
 	}
 
+	// (0) 소스 근거 — 승인 검사 **뒤**, 첫 출력 **전**. 승인에서 거부될 계획으로 저장소를 볼 까닭이 없고,
+	// 소스 근거만 있는 조치가 해석되지 않으면 플레이북도 기록도 내지 않아야 한다. 출력한 뒤에 거부하면
+	// stdout을 받은 쪽은 이미 산출물을 쥐고 있다. 승인 뒤에 저장소가 바뀌었거나 근거가 사라졌을 수 있어 다시 본다.
+	srcCheck, err := checkSource(plan, *dsn)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "refused:", err)
+		os.Exit(1)
+	}
+
 	// (1) 플레이북 — stdout. --rollback이면 역방향(배치 파일 제거), 아니면 forward.
 	if *rollbackFlag {
 		fmt.Print(provisioning.GenerateRollbackPlaybook(plan, level))
 	} else {
-		fmt.Print(provisioning.GenerateProvisioningPlaybook(plan, level))
+		fmt.Print(provisioning.GenerateProvisioningPlaybookWithSource(plan, level, srcCheck.Notes()))
 	}
 
 	// (2) 계획이 모자라 산출물이나 이력이 불완전해지는 자리를 알린다.
 	incomplete := reportWarnings(plan, level, *rollbackFlag)
+	// 혼합 근거 조치에서 해석하지 못한 소스 근거 — 그 근거에 기대는 안내는 빠졌다. 불완전이다.
+	for _, w := range srcCheck.Incomplete(plan) {
+		fmt.Fprintln(os.Stderr, "⚠ [provision] "+w)
+		incomplete++
+	}
 
 	if *rollbackFlag {
 		finish(incomplete, *allowIncomplete)
@@ -182,7 +199,15 @@ func main() {
 		}
 		rec := provisioning.NewProvisioningRecord(
 			plan.GetId()+":"+a.GetId(), node, appKeys, plan.GetId(), a, before)
-		if f == nil {
+		// 소스 근거를 찾은 결과 — 소스 근거가 있는 조치에서만 채운다(없는 조치의 기록 JSON은 그대로).
+		for _, r := range srcCheck[a.GetId()] {
+			rec.SourceEvidenceResolutions = append(rec.SourceEvidenceResolutions, r.Proto())
+		}
+		switch {
+		case f == nil && provisioning.SourceOnly(a):
+			// 런타임 자산이 없는 조치다. 캡처하지 못한 것이 아니라 캡처할 것이 없다.
+			rec.Note = "before not applicable: no runtime asset — this action is based on source evidence only"
+		case f == nil:
 			// 근거 스냅샷에서는 찾았어도(아래 ResolveAction) 최신 스냅샷에는 없을 수 있다. 그때 before는
 			// 비고, 비었다는 것이 「그 앱에 암호 구성이 없다」는 뜻이 아님을 기록에 남긴다.
 			rec.Note = fmt.Sprintf("before not captured: finding %s is not in the latest snapshot of node %s — an empty before is not evidence that the app has no crypto configuration", a.GetFindingId(), node)
@@ -334,4 +359,23 @@ func checkApprovals(plan *provisioningv1.FinalizedPlan, allowUnverified bool) er
 	}
 	fmt.Fprintf(os.Stderr, "[provision] approvals verified: %s\n", strings.Join(chk.Approved, ", "))
 	return nil
+}
+
+// checkSource — 계획의 소스 근거를 출력 전에 해석한다. 소스 근거가 없으면 아무것도 열지 않는다.
+// 저장소는 조회 전용으로 연다(테이블을 만들지 않는다). 열지 못하면 그 오류를 사유로 남긴다.
+func checkSource(plan *provisioningv1.FinalizedPlan, dsn string) (provisioning.SourceEvidenceCheck, error) {
+	if !provisioning.PlanHasSourceEvidence(plan) {
+		return nil, nil
+	}
+	var lookup provisioning.SourceEvidenceLookup
+	if dsn != "" {
+		st, err := sestore.OpenPgStoreIn(context.Background(), dsn, org.FromEnv())
+		if err != nil {
+			lookup = provisioning.FailingSourceLookup{Err: fmt.Errorf("could not open the source evidence store: %w", err)}
+		} else {
+			defer st.Close()
+			lookup = st
+		}
+	}
+	return provisioning.CheckSourceEvidence(lookup, plan)
 }

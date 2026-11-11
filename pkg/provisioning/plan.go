@@ -81,6 +81,12 @@ func actionable(p *provisioningv1.FinalizedPlan) error {
 			return fmt.Errorf("%w: %s (node=%s) has kind=UNSPECIFIED, so there is nothing to generate",
 				ErrNotActionable, where, a.GetTargetNodeId())
 		}
+		// 소스 근거만 있는 조치는 코드·빌드를 고치는 조치에서만 받는다. 다른 종류는 노드의 런타임 자산을
+		// 바꾸므로 그 자산을 관측한 근거가 있어야 한다 — 경고로 넘기면 런타임을 본 적 없는 변경이 승인된다.
+		if SourceOnly(a) && !sourceOnlyKindAllowed(a.GetKind()) {
+			return fmt.Errorf("%w: %s (node=%s) is based only on source evidence, but kind=%s changes the runtime — it needs runtime evidence (finding_id / evidence_sources). Source evidence alone is accepted only for APP_RECONFIG and REBUILD",
+				ErrNotActionable, where, a.GetTargetNodeId(), a.GetKind())
+		}
 	}
 	return nil
 }
@@ -100,7 +106,8 @@ func TraceabilityWarnings(p *provisioningv1.FinalizedPlan) []string {
 	// 맞는지·찾히는지는 ResolveAction이 따로 알린다 — 여기는 「있는가」만 본다.
 	if p.GetDerivedFromSnapshotId() == "" {
 		for _, a := range p.GetActions() {
-			if len(a.GetEvidenceSources()) == 0 {
+			// 소스 근거가 있는 조치는 그것이 근거다(스냅샷이 아니라 저장된 변환 결과를 가리킨다).
+			if len(a.GetEvidenceSources()) == 0 && len(a.GetSourceEvidence()) == 0 {
 				out = append(out, fmt.Sprintf("action %s (node=%s): no evidence_sources and the plan has no derived_from_snapshot_id — nothing says which snapshot state it was derived from (§1.2).",
 					a.GetId(), a.GetTargetNodeId()))
 			}
@@ -113,7 +120,8 @@ func TraceabilityWarnings(p *provisioningv1.FinalizedPlan) []string {
 		out = append(out, "the plan has no finalized_at — it claims to be FINALIZED but not when.")
 	}
 	for _, a := range p.GetActions() {
-		if a.GetFindingId() == "" {
+		// 소스 근거만 있는 조치는 finding이 없는 것이 맞다 — 가짜 finding을 만들지 않는 꼴이다.
+		if a.GetFindingId() == "" && !SourceOnly(a) {
 			out = append(out, fmt.Sprintf("action %s (node=%s): no finding_id — the action names no observed asset as its basis (§2.4).",
 				a.GetId(), a.GetTargetNodeId()))
 		}

@@ -167,6 +167,11 @@ func ResolveAction(lookup history.SnapshotLookup, plan *provisioningv1.Finalized
 		}
 		return out
 	}
+	// 소스 근거만 있는 조치는 런타임 근거가 없다 — 계획 단위 스냅샷으로 되짚을 것이 없다. 호환 경로로 읽으면
+	// 그 스냅샷에 없는 조치를 「못 찾은 참조」로 세어 불완전이 된다. 이 조치의 근거는 ResolveSourceEvidence가 본다.
+	if SourceOnly(a) {
+		return nil
+	}
 	legacy := plan.GetDerivedFromSnapshotId()
 	if legacy == "" {
 		return nil
