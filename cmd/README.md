@@ -11,7 +11,7 @@ The CLIs (Go binaries) of the provisioning stage. They **attach an approval sign
 ### `pqcota-provision`
 
 ```
-pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] <plan.json>
+pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] [--guide-dir <dir>] <plan.json>
 ```
 
 | Argument · option | What it does |
@@ -71,6 +71,18 @@ read-only, after the approvals are checked and before anything is printed.
 - Resolved references are written into the playbook as comments: the reported locations, for review. They come from the CBOM, so control
   characters are escaped; nothing is checked against the current source.
 
+**Guides.** An action can name the guide its author chose (`guide`: id, revision, the sha256 of the guide's manifest and body, the
+purpose and conditions the author confirmed, and which of the action's evidence it was chosen for). `--guide-dir` is a local catalog
+with one directory per guide revision ([the pqcota catalog](https://github.com/randyinthedev-hash/pqcota/blob/main/docs/guides/catalog/README.md)).
+The manifest, the body and each example are compared with the plan by hash; nothing is fetched from a URL, and another revision is never
+used instead. The evidence the guide was chosen for is looked up before anything is printed (runtime evidence needs `--dsn`).
+
+- If the guide of an action based only on source evidence does not match, the whole plan is refused before the playbook is printed.
+- For any other action the guide is left out, the reason (with the expected and the found hash) goes to stderr and the record, and the run
+  counts as incomplete (exit 3). The config fragment is still generated.
+- **The playbook says `approved guide` only when this run verified the approval signatures.** With `--allow-unverified-approvals` the same
+  guide is written as "guide named in the plan (approval signatures NOT verified …)".
+
 ### Applying it
 
 ```bash
@@ -107,13 +119,16 @@ Applying adds files and leaves the originals untouched; undoing removes only the
 ### `pqcota-approve`
 
 ```
-pqcota-approve --approver <id> [--dsn <postgres>] <plan.json>
+pqcota-approve --approver <id> [--dsn <postgres>] [--guide-dir <dir>] <plan.json>
+pqcota-approve --review [--dsn <postgres>] [--guide-dir <dir>] <plan.json>
 ```
 
 | Argument · option | What it does |
 |---|---|
 | `--approver <id>` | the approver id. **`:` cannot be used**: it is the separator in the signature string |
-| `--dsn <postgres>` | the source evidence store, read-only. **Required when an action is based only on source evidence**: its references are looked up before signing, and the plan is not signed if one does not resolve. Without such actions it is not needed |
+| `--dsn <postgres>` | the source evidence store and the history, read-only. **Required when an action is based only on source evidence, or when a guide was chosen for some evidence**: those references are looked up before signing, and the plan is not signed if one does not resolve. Otherwise it is not needed |
+| `--guide-dir <dir>` | the local guide catalog. **Required when the plan names a guide**: every guide is compared by hash before signing, and the plan is not signed if one does not match |
+| `--review` | does not sign. Prints what would be approved — each action's evidence, the guide with its title and verified hashes, the purpose and conditions the author confirmed, what the guide was chosen for, its observation limits — followed by **the full text of each verified guide body**. Exit 0 means the plan could be signed. When signing, the same summary (without the body text) goes to stderr |
 | `env PQCOTA_APPROVAL_KEY` | a base64 ed25519 **private key**, as produced by [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-common/blob/main/cmd/README.md#pqcota-keygen) |
 
 The signed plan goes to stdout. The signature string has the form `<approver>:ed25519:<base64>`, and it covers **the whole plan except the approval signatures themselves**.

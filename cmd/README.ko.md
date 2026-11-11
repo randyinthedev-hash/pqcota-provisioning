@@ -11,7 +11,7 @@
 ### `pqcota-provision`
 
 ```
-pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] <plan.json>
+pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] [--guide-dir <dir>] <plan.json>
 ```
 
 | 인자 · 옵션 | 하는 일 |
@@ -70,6 +70,18 @@ pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] <plan.json>
 - 찾은 참조는 플레이북에 주석으로 적습니다. 검토할 보고 위치입니다. CBOM에서 온 글이라 제어 문자를 이스케이프하고, 지금 소스와
   대조하지는 않습니다.
 
+**가이드.** 액션은 작성자가 고른 가이드를 가리킬 수 있습니다(`guide`: id, 판, 가이드 매니페스트와 본문의 sha256, 작성자가 확인한 용도와
+적용 조건, 그 액션의 어느 근거로 골랐는지). `--guide-dir`는 가이드 판마다 디렉터리가 하나씩 있는 로컬 카탈로그입니다
+([pqcota의 카탈로그](https://github.com/randyinthedev-hash/pqcota/blob/main/docs/guides/catalog/README.md)). 매니페스트, 본문, 예제마다
+계획과 해시로 대조합니다. URL에서 받지 않고, 다른 판으로 바꾸지 않습니다. 가이드를 고른 근거는 무엇이든 출력하기 전에 찾습니다(런타임
+근거는 `--dsn`이 필요합니다).
+
+- 소스 근거만 있는 액션의 가이드가 맞지 않으면 플레이북을 내기 전에 계획 전체를 거부합니다.
+- 그 밖의 액션은 가이드만 빼고, 사유(기대 해시와 실제 해시 포함)를 stderr와 기록에 남기며, 불완전으로 셉니다(종료 3). config 조각은
+  그대로 만듭니다.
+- **플레이북에 `approved guide`라고 쓰는 것은 이번 실행이 승인 서명을 검증했을 때뿐입니다.** `--allow-unverified-approvals`로 돌면 같은
+  가이드를 「guide named in the plan (approval signatures NOT verified …)」로 적습니다.
+
 ### 적용하기
 
 ```bash
@@ -106,13 +118,16 @@ ansible-playbook -i targets.ini provision-rollback.yml
 ### `pqcota-approve`
 
 ```
-pqcota-approve --approver <id> [--dsn <postgres>] <plan.json>
+pqcota-approve --approver <id> [--dsn <postgres>] [--guide-dir <dir>] <plan.json>
+pqcota-approve --review [--dsn <postgres>] [--guide-dir <dir>] <plan.json>
 ```
 
 | 인자 · 옵션 | 하는 일 |
 |---|---|
 | `--approver <id>` | 승인자 id입니다. **`:`는 쓸 수 없습니다.** 서명 문자열의 구분자입니다 |
-| `--dsn <postgres>` | 소스 근거 저장소이며 읽기 전용으로 엽니다. **소스 근거만 있는 액션이 있으면 필요합니다.** 서명하기 전에 그 참조를 찾고, 하나라도 찾지 못하면 서명하지 않습니다. 그런 액션이 없으면 주지 않아도 됩니다 |
+| `--dsn <postgres>` | 소스 근거 저장소와 이력이며 읽기 전용으로 엽니다. **소스 근거만 있는 액션이 있거나, 가이드가 어떤 근거로 골라졌으면 필요합니다.** 서명하기 전에 그 참조를 찾고, 하나라도 찾지 못하면 서명하지 않습니다. 그 밖에는 주지 않아도 됩니다 |
+| `--guide-dir <dir>` | 로컬 가이드 카탈로그입니다. **계획에 가이드가 있으면 필요합니다.** 서명하기 전에 가이드마다 해시로 대조하고, 하나라도 맞지 않으면 서명하지 않습니다 |
+| `--review` | 서명하지 않습니다. 승인할 것을 보여 줍니다. 액션마다 근거, 제목과 검증한 해시가 붙은 가이드, 작성자가 확인한 용도와 적용 조건, 가이드를 고른 근거, 관측 한계를 보이고, 그 뒤에 **검증한 가이드 본문 전문**을 붙입니다. 종료 0이면 서명할 수 있는 계획입니다. 서명할 때도 같은 요약(본문 전문 제외)을 stderr에 냅니다 |
 | `env PQCOTA_APPROVAL_KEY` | base64 ed25519 **개인 키**이며, [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-common/blob/main/cmd/README.ko.md#pqcota-keygen)이 만든 것입니다 |
 
 서명된 계획은 stdout으로 나옵니다. 서명 문자열의 형식은 `<approver>:ed25519:<base64>`이며, **승인 서명 자체를 뺀 계획 전체**를 덮습니다.
