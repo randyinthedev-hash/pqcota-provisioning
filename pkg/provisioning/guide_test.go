@@ -89,6 +89,9 @@ func TestLoadGuide(t *testing.T) {
 		{"duplicate example", func(m string) string { return strings.Replace(m, `"path":"Example.java"`, `"path":"README.md"`, 1) }, "listed twice"},
 		{"example hash", func(m string) string { return strings.Replace(m, `"sha256":"`, `"sha256":"0`, 1) }, "hash differs"},
 		{"unknown field", func(m string) string { return strings.Replace(m, `"title"`, `"extra":1,"title"`, 1) }, "not valid"},
+		// JSON 문서 하나만 — 유효한 객체 뒤에 내용이 붙으면 해시가 맞아도 받지 않는다.
+		{"trailing object", func(m string) string { return m + ` {"id":"x"}` }, "content after the JSON document"},
+		{"trailing garbage", func(m string) string { return m + "\n]" }, "content after the JSON document"},
 	}
 	for _, e := range edits {
 		d, s := catalog(t, e.edit)
@@ -116,6 +119,39 @@ func TestLoadGuide(t *testing.T) {
 	}
 	if g, why, _ := provisioning.LoadGuide(d, s); g != nil || !strings.Contains(why, "resolves outside") {
 		t.Errorf("symlink outside: %q", why)
+	}
+	// 판 디렉터리 자체가 카탈로그 밖을 가리키는 심볼릭 링크.
+	d, s = catalog(t, nil)
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere")
+	os.Rename(filepath.Join(d, "doc-key", "1"), elsewhere)
+	os.Symlink(elsewhere, filepath.Join(d, "doc-key", "1"))
+	if g, why, _ := provisioning.LoadGuide(d, s); g != nil || !strings.Contains(why, "revision directory resolves outside") {
+		t.Errorf("revision directory outside: %q", why)
+	}
+	// 판 디렉터리 안에 머무는 심볼릭 링크는 따라간다.
+	d, s = catalog(t, nil)
+	rev = filepath.Join(d, "doc-key", "1")
+	os.Mkdir(filepath.Join(rev, "src"), 0o755)
+	os.Rename(filepath.Join(rev, "Example.java"), filepath.Join(rev, "src", "Example.java"))
+	os.Symlink(filepath.Join("src", "Example.java"), filepath.Join(rev, "Example.java"))
+	if g, why, _ := provisioning.LoadGuide(d, s); g == nil {
+		t.Errorf("a symlink that stays inside the revision directory was refused: %q", why)
+	}
+	// 카탈로그 안이라도 판 디렉터리 밖이면 거부한다(파일은 그 판 디렉터리 안으로 한정).
+	d, s = catalog(t, nil)
+	rev = filepath.Join(d, "doc-key", "1")
+	os.Rename(filepath.Join(rev, "Example.java"), filepath.Join(d, "Example.java"))
+	os.Symlink(filepath.Join("..", "..", "Example.java"), filepath.Join(rev, "Example.java"))
+	if g, why, _ := provisioning.LoadGuide(d, s); g != nil || !strings.Contains(why, "resolves outside the guide directory") {
+		t.Errorf("a symlink to elsewhere in the catalog: %q", why)
+	}
+	// 예제 자리가 디렉터리면 읽지 않는다.
+	d, s = catalog(t, nil)
+	rev = filepath.Join(d, "doc-key", "1")
+	os.Remove(filepath.Join(rev, "Example.java"))
+	os.Mkdir(filepath.Join(rev, "Example.java"), 0o755)
+	if g, why, _ := provisioning.LoadGuide(d, s); g != nil || !strings.Contains(why, "not a regular file") {
+		t.Errorf("directory as example: %q", why)
 	}
 }
 

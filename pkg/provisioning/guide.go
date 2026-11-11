@@ -134,21 +134,26 @@ func LoadGuide(dir string, sel *provisioningv1.GuideSelection) (g *Guide, reason
 	if !guideDirName.MatchString(name) {
 		return nil, fmt.Sprintf("guide id %q does not end in a catalog directory name", view.Safe(sel.GetGuideId())), found
 	}
-	root, err := filepath.EvalSymlinks(dir)
+	// 카탈로그와 판 디렉터리를 **디렉터리 핸들**(os.Root)로 연다. 경로를 확인한 뒤 다시 경로로 여는 방식은 두 호출
+	// 사이에 경로가 바뀌면 확인한 경계가 지켜지지 않는다. os.Root는 여는 순간에 핸들 밖으로 나가는 경로(.., 밖을
+	// 가리키는 심볼릭 링크)를 거부하고, 아래의 모든 파일은 이 핸들에서 열어 그 바이트로 해시를 잰다.
+	cat, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, "the guide catalog cannot be read: " + err.Error(), found
 	}
-	revDir := filepath.Join(root, name, sel.GetRevision())
-	if st, err := os.Stat(revDir); err != nil || !st.IsDir() {
-		return nil, fmt.Sprintf("the catalog has no %s revision %s%s", name, sel.GetRevision(), otherRevisions(filepath.Join(root, name))), found
+	defer cat.Close()
+	revName := filepath.Join(name, sel.GetRevision())
+	rev, err := cat.OpenRoot(revName)
+	if err != nil {
+		if escapes(err) {
+			return nil, "the revision directory resolves outside the guide catalog", found
+		}
+		return nil, fmt.Sprintf("the catalog has no %s revision %s%s", name, sel.GetRevision(), otherRevisions(cat, name)), found
 	}
-	// 판 디렉터리 자체도 카탈로그 안이어야 한다(심볼릭 링크로 밖을 가리키지 않는다).
-	realRev, err := filepath.EvalSymlinks(revDir)
-	if err != nil || !within(root, realRev) {
-		return nil, "the revision directory resolves outside the guide catalog", found
-	}
+	defer rev.Close()
+	realRev := filepath.Join(dir, revName) // 표시용 경로. 읽기는 rev 핸들로만 한다
 
-	mraw, err := readWithin(realRev, "guide.json", maxManifestBytes)
+	mraw, err := readWithin(rev, "guide.json", maxManifestBytes)
 	if err != nil {
 		return nil, "manifest: " + err.Error(), found
 	}
@@ -162,11 +167,15 @@ func LoadGuide(dir string, sel *provisioningv1.GuideSelection) (g *Guide, reason
 	if err := dec.Decode(&m); err != nil {
 		return nil, "manifest is not valid: " + err.Error(), found
 	}
+	// JSON 문서 하나만 받는다. 첫 객체 뒤에는 공백과 EOF만 — CBOM 파서(sourceevidence.decode)와 같다.
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, "manifest is not valid: content after the JSON document", found
+	}
 	if m.ID != sel.GetGuideId() || m.Revision != sel.GetRevision() {
 		return nil, fmt.Sprintf("manifest names %s revision %s, the plan names %s revision %s",
 			view.Safe(m.ID), view.Safe(m.Revision), view.Safe(sel.GetGuideId()), sel.GetRevision()), found
 	}
-	body, err := readWithin(realRev, m.Body, maxGuideFile)
+	body, err := readWithin(rev, m.Body, maxGuideFile)
 	if err != nil {
 		return nil, "body: " + err.Error(), found
 	}
@@ -183,7 +192,7 @@ func LoadGuide(dir string, sel *provisioningv1.GuideSelection) (g *Guide, reason
 			return nil, fmt.Sprintf("example %s is listed twice (or is the body or the manifest)", view.Safe(e.Path)), found
 		}
 		seen[p] = true
-		b, err := readWithin(realRev, e.Path, maxGuideFile)
+		b, err := readWithin(rev, e.Path, maxGuideFile)
 		if err != nil {
 			return nil, "example: " + err.Error(), found
 		}
@@ -204,8 +213,9 @@ func LoadGuide(dir string, sel *provisioningv1.GuideSelection) (g *Guide, reason
 	return g, "", found
 }
 
-// readWithin — 판 디렉터리 안의 상대 경로만 읽는다. `..`·절대 경로·밖을 가리키는 심볼릭 링크를 거부한다.
-func readWithin(root, rel string, max int64) ([]byte, error) {
+// readWithin — 판 디렉터리 핸들 안의 상대 경로만 읽는다. `..`·절대 경로는 먼저 거부해 사유를 분명히 하고,
+// 밖을 가리키는 심볼릭 링크는 os.Root가 여는 순간에 거부한다. 읽은 바이트를 그대로 돌려준다(그것으로 해시를 잰다).
+func readWithin(root *os.Root, rel string, max int64) ([]byte, error) {
 	if rel == "" || filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") {
 		return nil, fmt.Errorf("%q must be a relative path inside the guide directory", view.Safe(rel))
 	}
@@ -214,19 +224,17 @@ func readWithin(root, rel string, max int64) ([]byte, error) {
 			return nil, fmt.Errorf("%q must not contain ..", view.Safe(rel))
 		}
 	}
-	p := filepath.Join(root, rel)
-	real, err := filepath.EvalSymlinks(p)
+	f, err := root.Open(rel)
 	if err != nil {
+		if escapes(err) {
+			return nil, fmt.Errorf("%q resolves outside the guide directory", view.Safe(rel))
+		}
 		return nil, fmt.Errorf("%s: %v", view.Safe(rel), err)
 	}
-	if !within(root, real) {
-		return nil, fmt.Errorf("%q resolves outside the guide directory", view.Safe(rel))
-	}
-	f, err := os.Open(real)
-	if err != nil {
-		return nil, err
-	}
 	defer f.Close()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%q is not a regular file", view.Safe(rel))
+	}
 	var b bytes.Buffer
 	n, err := b.ReadFrom(io.LimitReader(f, max+1))
 	if err != nil {
@@ -238,18 +246,23 @@ func readWithin(root, rel string, max int64) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+// escapes — os.Root가 핸들 밖으로 나가는 경로를 거부한 오류인가.
+func escapes(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "path escapes from parent")
+}
+
 func sha256Hex(b []byte) string {
 	s := sha256.Sum256(b)
 	return hex.EncodeToString(s[:])
 }
 
-func within(root, p string) bool {
-	rel, err := filepath.Rel(root, p)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
-}
-
-func otherRevisions(dir string) string {
-	es, err := os.ReadDir(dir)
+func otherRevisions(cat *os.Root, name string) string {
+	d, err := cat.Open(name)
+	if err != nil {
+		return ""
+	}
+	defer d.Close()
+	es, err := d.ReadDir(-1)
 	if err != nil {
 		return ""
 	}
