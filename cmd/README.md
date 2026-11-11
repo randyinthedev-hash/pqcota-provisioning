@@ -45,9 +45,9 @@ The playbook goes to stdout. Take it with `> provision.yml`.
 | Exit status | Meaning |
 |---|---|
 | `0` | the output came out and there are no blanks. With `--dsn`, it looks up each action's snapshot reference in the history and leaves it on the record (`pqcota-records` shows it as a `snapshot:` line) |
-| `1` | **refused**: this plan is not grounds for execution (not finalized, no approval, no action, approval cannot be verified, approval verification failed). Not a single line of playbook comes out |
+| `1` | **refused**: this plan is not grounds for execution (not finalized, no approval, no action, approval cannot be verified, approval verification failed), or an action based only on source evidence has a reference that does not resolve (see below). Not a single line of playbook comes out, and no record is written |
 | `1` | also exit 1: the database connection, lookup or record write failed after the playbook was printed, so the playbook is already out |
-| `3` | **incomplete**: the output came out but has blanks. The target algorithm, an activation hook or the traceability evidence is empty, or **the shape of a snapshot reference is wrong** (caught even without `--dsn`), or **it was looked up with `--dsn` and is not in the history, or the snapshot found does not contain that finding.** Which one it is, is written by name on stderr |
+| `3` | **incomplete**: the output came out but has blanks. The target algorithm, an activation hook or the traceability evidence is empty, or **the shape of a snapshot reference is wrong** (caught even without `--dsn`), or **it was looked up with `--dsn` and is not in the history, or the snapshot found does not contain that finding**, or a source evidence reference on an action that also has runtime evidence did not resolve. Which one it is, is written by name on stderr |
 | `2` | the usage is wrong |
 
 `--rollback` goes through the same checks. Deleting files has nothing to do with the target algorithm, so that warning is not given, but not being able to undo the activation for lack of `deactivate` and `restart`, and having no basis to retrace what is being undone, are weighed the same as in the forward direction.
@@ -57,6 +57,19 @@ The playbook goes to stdout. Take it with `> provision.yml`.
 **`--dsn` reads the history and writes the records under the organization named by `PQCOTA_ORG`** (the default organization when it is not set; with `PQCOTA_REQUIRE_ORG=1` an organization must be named). `pqcota-records` reads under the same variable.
 
 **What `--dsn` does is record, not apply.** It captures the state *before* the action (the modules with their versions, and the provider chain; the configuration itself is not captured), which becomes the basis for saying what to return to when you undo it later.
+
+**Source evidence.** An action can point at source evidence stored by `pqcota-cbom-ingest --source-evidence` (`sourceEvidence`: the conversion,
+the item, optionally one location, and the CBOM's hash). The references are looked up in the source evidence store of the same organization,
+read-only, after the approvals are checked and before anything is printed.
+
+- **An action based only on source evidence** (no `findingId`, no `evidenceSources`) is accepted only for `APP_RECONFIG` and `REBUILD`; any
+  other kind changes the runtime and needs runtime evidence, so the plan is refused. Every reference of such an action must resolve. If one does
+  not, or there is no `--dsn` to look it up with, the whole plan is refused (exit 1) **before the playbook is printed**: stdout stays empty and no
+  record is written. Its record says the before state is not applicable rather than not captured.
+- **An action that also has runtime evidence** is generated as usual. A source evidence reference that does not resolve leaves out the source
+  locations that depend on it, writes the reason in the playbook comments and the record, and counts as incomplete (exit 3).
+- Resolved references are written into the playbook as comments: the reported locations, for review. They come from the CBOM, so control
+  characters are escaped; nothing is checked against the current source.
 
 ### Applying it
 
@@ -94,12 +107,13 @@ Applying adds files and leaves the originals untouched; undoing removes only the
 ### `pqcota-approve`
 
 ```
-pqcota-approve --approver <id> <plan.json>
+pqcota-approve --approver <id> [--dsn <postgres>] <plan.json>
 ```
 
 | Argument · option | What it does |
 |---|---|
 | `--approver <id>` | the approver id. **`:` cannot be used**: it is the separator in the signature string |
+| `--dsn <postgres>` | the source evidence store, read-only. **Required when an action is based only on source evidence**: its references are looked up before signing, and the plan is not signed if one does not resolve. Without such actions it is not needed |
 | `env PQCOTA_APPROVAL_KEY` | a base64 ed25519 **private key**, as produced by [`pqcota-keygen`](https://github.com/randyinthedev-hash/pqcota-common/blob/main/cmd/README.md#pqcota-keygen) |
 
 The signed plan goes to stdout. The signature string has the form `<approver>:ed25519:<base64>`, and it covers **the whole plan except the approval signatures themselves**.
