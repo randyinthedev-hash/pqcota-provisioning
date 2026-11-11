@@ -186,7 +186,7 @@ func main() {
 
 	n := 0
 	resolved, unresolved, uncaptured := 0, 0, 0
-	for _, a := range plan.GetActions() {
+	for ai, a := range plan.GetActions() {
 		node := a.GetTargetNodeId()
 		// before는 **조치의 finding 하나**에서만 캡처한다. v0.10.6까지는 노드의 finding 전부를 넘겨,
 		// JVM이 여럿이면 다른 앱의 provider 체인이 이 기록에 이어 붙었다.
@@ -200,7 +200,7 @@ func main() {
 		rec := provisioning.NewProvisioningRecord(
 			plan.GetId()+":"+a.GetId(), node, appKeys, plan.GetId(), a, before)
 		// 소스 근거를 찾은 결과 — 소스 근거가 있는 조치에서만 채운다(없는 조치의 기록 JSON은 그대로).
-		for _, r := range srcCheck[a.GetId()] {
+		for _, r := range srcCheck.Of(ai) { // 순번으로 — id가 겹쳐도 다른 조치의 결과가 붙지 않는다
 			rec.SourceEvidenceResolutions = append(rec.SourceEvidenceResolutions, r.Proto())
 		}
 		switch {

@@ -131,4 +131,46 @@ func TestSourceEvidenceWithDSN(t *testing.T) {
 	if r := recordJSON(t, dsn, orgName, mixedID+":a1"); !strings.Contains(r, "has no item gone") || strings.Contains(r, `"resolved":true`) {
 		t.Errorf("mixed record: %s", r)
 	}
+
+	// 4. id가 같은 두 조치(a1) — 첫째는 런타임 근거만, 둘째는 소스 근거만. 기록은 각자의 것을 갖는다.
+	dupID := "src-dup-" + stamp
+	dup := strings.Replace(srcPlan(in.ID, item, in.InputSHA256), `"id":"a2"`, `"id":"a1"`, 1)
+	p = writePlan(t, strings.Replace(dup, `"t-src"`, `"`+dupID+`"`, 1))
+	out, errOut, code = runProvision(t, bin, env, "--level", "l2", unverified, "--dsn", dsn, "--allow-incomplete", p)
+	if code != 0 || strings.Count(out, "source evidence (reported locations") != 1 {
+		t.Fatalf("duplicate ids: exit %d\n%s\n%s", code, out, errOut)
+	}
+	recs := recordsOfPlan(t, dsn, orgName, dupID)
+	if len(recs) != 2 || strings.Contains(recs[0], "sourceEvidenceResolutions") || !strings.Contains(recs[1], `"resolved":true`) ||
+		!strings.Contains(recs[1], "before not applicable") || strings.Contains(recs[0], "before not applicable") {
+		t.Fatalf("records of two actions sharing an id are mixed:\n%s", strings.Join(recs, "\n"))
+	}
+}
+
+// recordsOfPlan — 한 계획의 기록을 쓴 순서대로(공백 없는 JSON).
+func recordsOfPlan(t *testing.T, dsn, organization, planID string) []string {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	rows, err := pool.Query(context.Background(), `SELECT record::text FROM pqcota_provisioning_record WHERE org=$1 AND plan_id=$2 ORDER BY seq`, organization, planID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		var b bytes.Buffer
+		if err := json.Compact(&b, []byte(raw)); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, b.String())
+	}
+	return out
 }

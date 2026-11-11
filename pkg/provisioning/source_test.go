@@ -149,11 +149,11 @@ func TestCheckSourceEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mixed unresolved must not refuse: %v", err)
 	}
-	if inc := check.Incomplete(p); len(inc) != 1 || !strings.Contains(inc[0], "action r1") || !strings.Contains(inc[0], "No source location or guide") {
+	if inc := check.Incomplete(p); len(inc) != 1 || !strings.Contains(inc[0], "action[0] r1") || !strings.Contains(inc[0], "No source location or guide") {
 		t.Fatalf("incomplete %v", inc)
 	}
 	p.Actions[1].SourceEvidence = append(p.Actions[1].SourceEvidence, bad)
-	if _, err := provisioning.CheckSourceEvidence(lk, p); !errors.Is(err, provisioning.ErrSourceEvidenceUnresolved) || !strings.Contains(err.Error(), "action s1") {
+	if _, err := provisioning.CheckSourceEvidence(lk, p); !errors.Is(err, provisioning.ErrSourceEvidenceUnresolved) || !strings.Contains(err.Error(), "action[1] s1") {
 		t.Fatalf("source-only unresolved: %v", err)
 	}
 	if _, err := provisioning.CheckSourceEvidence(nil, finalized(sourceOnly(provisioningv1.RemediationKind_REMEDIATION_KIND_APP_RECONFIG, ref(in, 0, 0)))); !errors.Is(err, provisioning.ErrSourceEvidenceUnresolved) {
@@ -230,5 +230,55 @@ func TestSourceOnlyActionHasNoSnapshotResolution(t *testing.T) {
 	p.DerivedFromSnapshotId = "snap-1"
 	if rs := provisioning.ResolveAction(nil, p, p.Actions[0]); len(rs) != 0 {
 		t.Fatalf("a source-only action was resolved against the plan-level snapshot: %+v", rs)
+	}
+}
+
+// id가 같은 두 조치 — 결과·주석은 순번으로 이어져 각자의 근거만 붙는다. 한 조치에만 소스 근거가 있는 경우도 본다.
+func TestSourceEvidenceFollowsActionPositionNotID(t *testing.T) {
+	lk, in := seFixture(t)
+	first := runtimeAction(ref(in, 0, 0)) // src/Wrap.java:12
+	first.Id = "dup"
+	second := sourceOnly(provisioningv1.RemediationKind_REMEDIATION_KIND_APP_RECONFIG, ref(in, 0, 1)) // src/evil…:3
+	second.Id = "dup"
+	level := provisioningv1.DeployAutomationLevel_DEPLOY_AUTOMATION_LEVEL_L2_STAGE_INSTALL
+
+	p := finalized(first, second)
+	check, err := provisioning.CheckSourceEvidence(lk, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(check) != 2 || !strings.Contains(strings.Join(check.Of(0)[0].Lines, "|"), "Wrap.java:12") ||
+		!strings.Contains(strings.Join(check.Of(1)[0].Lines, "|"), "evil") {
+		t.Fatalf("results are not tied to their own action: %+v", check)
+	}
+	out := provisioning.GenerateProvisioningPlaybookWithSource(p, level, check.Notes())
+	i12, iEvil := strings.Index(out, "src/Wrap.java:12"), strings.Index(out, "evil")
+	if strings.Count(out, "src/Wrap.java:12") != 1 || strings.Count(out, `src/evil\u000a`) != 1 || i12 < 0 || iEvil < i12 {
+		t.Fatalf("notes are mixed between the two actions\n%s", out)
+	}
+	// 첫 조치의 주석은 그 config 조각 뒤, 둘째 조치의 수동 단계 앞에 있어야 한다.
+	if manual := strings.Index(out, "cannot be delivered through config"); manual < i12 || manual > iEvil {
+		t.Fatalf("a note is attached to the wrong action\n%s", out)
+	}
+
+	// 한 조치에만 소스 근거 — 다른 조치(같은 id)에는 아무것도 붙지 않는다.
+	plain := runtimeAction()
+	plain.Id = "dup"
+	for _, order := range [][]*provisioningv1.RemediationAction{{plain, second}, {second, plain}} {
+		p := finalized(order...)
+		check, err := provisioning.CheckSourceEvidence(lk, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		withSrc := 1
+		if order[0] == second {
+			withSrc = 0
+		}
+		if check.Of(1-withSrc) != nil || check.Of(withSrc) == nil {
+			t.Fatalf("source evidence attached to the action without it: %+v", check)
+		}
+		if n := strings.Count(provisioning.GenerateProvisioningPlaybookWithSource(p, level, check.Notes()), "source evidence (reported locations"); n != 1 {
+			t.Fatalf("%d note blocks for one action with source evidence", n)
+		}
 	}
 }

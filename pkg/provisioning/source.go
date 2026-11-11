@@ -192,28 +192,31 @@ func isSHA256Hex(s string) bool {
 	return true
 }
 
-// SourceEvidenceCheck — 계획 전체의 소스 근거 해석 결과. 조치 id → 결과(소스 근거가 있는 조치만).
-type SourceEvidenceCheck map[string][]SourceResolution
+// SourceEvidenceCheck — 계획 전체의 소스 근거 해석 결과. **조치 목록의 순번**으로 잇는다(i번째가 actions[i]의 결과,
+// 소스 근거가 없는 조치는 nil). 조치 id로 잇지 않는 이유: 계약 검사는 id의 중복이나 빈 값을 거부하지 않아서,
+// id가 같은 두 조치가 있으면 뒤 조치의 결과가 앞 조치를 덮고 다른 조치의 근거가 주석·기록에 붙는다. 순번은
+// 서명이 덮는 조치 순서 그대로라 그런 일이 없다.
+type SourceEvidenceCheck [][]SourceResolution
 
 // CheckSourceEvidence — 승인·생성이 **출력 전에** 부른다. 소스 근거만 있는 조치의 참조가 하나라도 미해결이면
 // ErrSourceEvidenceUnresolved(사유를 모두 싣는다). 혼합 근거 조치의 미해결은 결과에만 남는다(Incomplete).
 //
 // GATE: 배선 필수
 func CheckSourceEvidence(lookup SourceEvidenceLookup, p *provisioningv1.FinalizedPlan) (SourceEvidenceCheck, error) {
-	out := SourceEvidenceCheck{}
+	out := make(SourceEvidenceCheck, len(p.GetActions()))
 	var bad []string
-	for _, a := range p.GetActions() {
+	for ai, a := range p.GetActions() {
 		if len(a.GetSourceEvidence()) == 0 {
 			continue
 		}
 		rs := ResolveSourceEvidence(lookup, a)
-		out[a.GetId()] = rs
+		out[ai] = rs
 		if !SourceOnly(a) {
 			continue
 		}
 		for i, r := range rs {
 			if !r.Resolved {
-				bad = append(bad, fmt.Sprintf("action %s (node=%s) source_evidence[%d]: %s", a.GetId(), a.GetTargetNodeId(), i, r.Reason))
+				bad = append(bad, fmt.Sprintf("action[%d] %s (node=%s) source_evidence[%d]: %s", ai, a.GetId(), a.GetTargetNodeId(), i, r.Reason))
 			}
 		}
 	}
@@ -227,21 +230,33 @@ func CheckSourceEvidence(lookup SourceEvidenceLookup, p *provisioningv1.Finalize
 // CheckSourceEvidence가 이미 거부했으므로 여기 오지 않는다.
 func (c SourceEvidenceCheck) Incomplete(p *provisioningv1.FinalizedPlan) []string {
 	var out []string
-	for _, a := range p.GetActions() {
-		for i, r := range c[a.GetId()] {
+	for ai, a := range p.GetActions() {
+		for i, r := range c.Of(ai) {
 			if !r.Resolved {
-				out = append(out, fmt.Sprintf("action %s (node=%s): source_evidence[%d] not resolved — %s. No source location or guide is given for it.",
-					a.GetId(), a.GetTargetNodeId(), i, r.Reason))
+				out = append(out, fmt.Sprintf("action[%d] %s (node=%s): source_evidence[%d] not resolved — %s. No source location or guide is given for it.",
+					ai, a.GetId(), a.GetTargetNodeId(), i, r.Reason))
 			}
 		}
 	}
 	return out
 }
 
-// Notes — 플레이북에 붙일 조치별 주석 줄. 찾은 소스 위치만 보이고, 못 찾은 근거는 사유만 적는다.
-func (c SourceEvidenceCheck) Notes() map[string][]string {
-	out := map[string][]string{}
-	for id, rs := range c {
+// Of — i번째 조치의 결과. 범위 밖이거나 소스 근거가 없으면 nil(빈 결과가 nil 검사보다 쓰기 쉽다).
+func (c SourceEvidenceCheck) Of(i int) []SourceResolution {
+	if i < 0 || i >= len(c) {
+		return nil
+	}
+	return c[i]
+}
+
+// Notes — 플레이북에 붙일 조치별 주석 줄. 순번으로 잇는다(SourceEvidenceCheck와 같다). 찾은 소스 위치만 보이고,
+// 못 찾은 근거는 사유만 적는다.
+func (c SourceEvidenceCheck) Notes() [][]string {
+	out := make([][]string, len(c))
+	for ai, rs := range c {
+		if rs == nil {
+			continue
+		}
 		var ls []string
 		ls = append(ls, "source evidence (reported locations, for review — not checked against the current source):")
 		for i, r := range rs {
@@ -257,7 +272,7 @@ func (c SourceEvidenceCheck) Notes() map[string][]string {
 				}
 			}
 		}
-		out[id] = ls
+		out[ai] = ls
 	}
 	return out
 }
