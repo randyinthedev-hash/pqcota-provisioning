@@ -40,6 +40,14 @@ func countRecords(t *testing.T, dsn, organization string) int {
 		t.Fatal(err)
 	}
 	defer pool.Close()
+	// 빈 DB에서 처음 도는 시험이면 레코드 테이블이 아직 없다. 그것은 「레코드 0」이다(거부된 계획이 테이블을 만들지 않았다).
+	var exists bool
+	if err := pool.QueryRow(context.Background(), `SELECT to_regclass('pqcota_provisioning_record') IS NOT NULL`).Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		return 0
+	}
 	var n int
 	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM pqcota_provisioning_record WHERE org=$1`, organization).Scan(&n); err != nil {
 		t.Fatal(err)

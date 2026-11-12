@@ -232,6 +232,14 @@ func main() {
 			rec.Note = fmt.Sprintf("before not captured: finding %s is not in the latest snapshot of node %s — an empty before is not evidence that the app has no crypto configuration", a.GetFindingId(), node)
 			fmt.Fprintf(os.Stderr, "⚠ [provision] action %s (node=%s): finding %s is not in the node's latest snapshot — the record's before state is empty (not captured; it does not mean the app has no crypto configuration)\n", a.GetId(), node, a.GetFindingId())
 			uncaptured++
+		default:
+			// JCA 배포본의 JVM을 다 보지 못했거나(--pid, attach 실패) 체인이 여럿이면 체인을 before로 적지 않는다.
+			// 생성은 계속한다. 사유를 기록에 남기고 「before not captured」에 센다.
+			if why := provisioning.BeforeGap(before); why != "" {
+				rec.Note = why
+				fmt.Fprintf(os.Stderr, "⚠ [provision] action %s (node=%s): %s\n", a.GetId(), node, why)
+				uncaptured++
+			}
 		}
 		// 스냅샷 참조를 이력에서 **실제로 찾아** 레코드에 남긴다. 제출된 참조와 찾은 id를 한 항목으로
 		// 짝짓는다. 못 찾은 것은 불완전이다 — 원장 연결이 닫히지 않은 것이라 「연결 완료」와 다르다.
