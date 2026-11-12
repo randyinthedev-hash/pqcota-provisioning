@@ -58,6 +58,8 @@ pqcota-provision [--level l1|l2|l3] [--rollback] [--dsn <postgres>] [--guide-dir
 
 **`--dsn`이 하는 일은 기록이지 적용이 아닙니다.** 액션 *전*의 상태(모듈과 그 버전, provider 체인. 설정 자체는 기록하지 않습니다)를 기록하며, 나중에 되돌릴 때 무엇으로 돌아갈지 말하는 근거가 됩니다.
 
+**JCA 배포본의 provider 체인은 배포본 전체를 대표할 때만 기록합니다.** 액션의 발견 항목이 JVM 여럿의 배포본이고(v0.12.0), 그 JVM들의 체인이 서로 다르거나, 일부 JVM의 체인을 보지 못했거나, 결과가 `pqcota-jvmscan --pid`로 만든 것이면 before에 provider 체인을 남기지 않습니다. 생성은 계속합니다. 기록의 note에 까닭이 남고(`before not captured: …`) 요약 줄의 `before not captured`에 셉니다. JVM을 모두 같은 체인으로 관측한 배포본은 전처럼 기록합니다.
+
 **소스 근거.** 액션은 `pqcota-cbom-ingest --source-evidence`가 저장한 소스 근거를 가리킬 수 있습니다(`sourceEvidence`: 변환 결과, 항목,
 선택적인 위치 하나, CBOM의 해시). 참조는 승인을 확인한 뒤, 무엇이든 출력하기 전에 같은 조직의 소스 근거 저장소에서 읽기 전용으로 찾습니다.
 

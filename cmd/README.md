@@ -58,6 +58,8 @@ The playbook goes to stdout. Take it with `> provision.yml`.
 
 **What `--dsn` does is record, not apply.** It captures the state *before* the action (the modules with their versions, and the provider chain; the configuration itself is not captured), which becomes the basis for saying what to return to when you undo it later.
 
+**A JCA deployment's provider chain is recorded only when it stands for the whole deployment.** When the action's finding is a deployment of several JVMs (v0.12.0) and its JVMs were observed with different chains, or some JVM's chain was not observed, or the result came from `pqcota-jvmscan --pid`, the before state keeps no provider chain. Generation goes on; the record's note says why (`before not captured: …`) and the summary counts it in `before not captured`. A deployment whose JVMs were all observed with one chain is recorded as before.
+
 **Source evidence.** An action can point at source evidence stored by `pqcota-cbom-ingest --source-evidence` (`sourceEvidence`: the conversion,
 the item, optionally one location, and the CBOM's hash). The references are looked up in the source evidence store of the same organization,
 read-only, after the approvals are checked and before anything is printed.
