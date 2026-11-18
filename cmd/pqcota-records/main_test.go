@@ -4,11 +4,16 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/pgschema/pgschematest"
 )
 
 // 시험 실행 파일이 자기 자신을 이 명령으로 다시 띄운다.
@@ -60,5 +65,18 @@ func TestInitSchemaRefusesOtherArguments(t *testing.T) {
 		if strings.Contains(out, "schema ready") {
 			t.Errorf("%s: printed a success line", name)
 		}
+	}
+}
+
+// 커밋 결과를 받지 못하면 성공 줄 없이 종료 1이고, 연결을 복구해 다시 돌리라고 안내한다.
+func TestInitCommitUnknownPrintsNoSuccess(t *testing.T) {
+	c := &pgschematest.Conn{CommitErr: fmt.Errorf("conn closed: %w", io.ErrUnexpectedEOF)}
+	var o, e strings.Builder
+	code := runInit(context.Background(), c, &o, &e)
+	if code != 1 || o.Len() != 0 {
+		t.Fatalf("exit %d, stdout %q", code, o.String())
+	}
+	if !strings.Contains(e.String(), "restore the connection and run -init-schema again") || strings.Contains(e.String(), "nothing was changed") {
+		t.Fatalf("stderr: %q", e.String())
 	}
 }
