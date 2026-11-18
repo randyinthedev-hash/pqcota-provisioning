@@ -6,13 +6,21 @@
 // 이 뷰는 "무엇이 언제 어떤 before로 스테이징됐나"만 보인다.
 //
 // usage: pqcota-records [node]        (env PQCOTA_DSN 필수 — pqcota-provision과 같은 저장소)
+//
+//	pqcota-records -init-schema   # 프로비저닝 기록 표를 만들고 끝난다(한 트랜잭션)
+//
+// 조회는 DDL을 돌리지 않는다(v0.16.0부터). v0.15.0까지는 PQCOTA_AUTO_DDL=0이어도 빈 DB에 표를 만들었다.
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/pgschema"
 
 	provisioningv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/provisioning/v1"
 	"github.com/randyinthedev-hash/pqcota-common/pkg/org"
@@ -20,21 +28,39 @@ import (
 )
 
 func main() {
+	initSchema := flag.Bool("init-schema", false, "create the provisioning-record table in one transaction and exit; run it as the schema owner, and again after each upgrade")
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "usage: pqcota-records [node] | pqcota-records -init-schema")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+	if *initSchema && flag.NArg() > 0 {
+		fmt.Fprintln(os.Stderr, "-init-schema only creates the schema; it does not take a node argument")
+		os.Exit(2)
+	}
+	if flag.NArg() > 1 {
+		flag.Usage()
+		os.Exit(2)
+	}
 	dsn := os.Getenv("PQCOTA_DSN")
 	if dsn == "" {
 		fmt.Fprintln(os.Stderr, "PQCOTA_DSN is required — the Postgres that pqcota-provision wrote records to.")
 		os.Exit(2)
 	}
-	store, err := provisioning.NewPgRecordStoreIn(context.Background(), dsn, org.FromEnv())
+	if *initSchema {
+		os.Exit(initialize(dsn))
+	}
+	// 조회는 DDL 없이 연다 — 빈 DB에 표를 만들지 않고, 읽기 권한만 있는 계정으로도 열린다.
+	store, err := provisioning.OpenPgRecordStoreIn(context.Background(), dsn, org.FromEnv())
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "connecting to Postgres:", err)
+		fmt.Fprintln(os.Stderr, "opening the provisioning-record store:", err)
 		os.Exit(1)
 	}
 	defer store.Close()
 
 	var recs []*provisioningv1.ProvisioningRecord
-	if len(os.Args) > 1 && os.Args[1] != "" {
-		recs, err = store.ByNode(os.Args[1])
+	if node := flag.Arg(0); node != "" {
+		recs, err = store.ByNode(node)
 	} else {
 		recs, err = store.All()
 	}
@@ -74,3 +100,26 @@ func main() {
 }
 
 func short(s, prefix string) string { return strings.TrimPrefix(s, prefix) }
+
+// initialize — -init-schema. 성공 줄은 커밋하고 표·열을 다시 확인한 뒤에만 낸다.
+func initialize(dsn string) int {
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "connecting to Postgres:", err)
+		return 1
+	}
+	defer pool.Close()
+	rep, err := pgschema.Init(ctx, pool, provisioning.RecordSchema())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "initializing the schema failed:", err)
+		if pgschema.IsPrivilegeError(err) {
+			fmt.Fprintln(os.Stderr, "(this account may not own the existing pqcota table, or lacks USAGE/CREATE on the schema. "+
+				"Run -init-schema as the role that owns it, or move its ownership to the schema role first: "+
+				"https://github.com/randyinthedev-hash/pqcota-inventory/blob/main/cmd/README.md#setting-up-the-database)")
+		}
+		return 1
+	}
+	fmt.Print(pgschema.FormatReport(rep))
+	return 0
+}

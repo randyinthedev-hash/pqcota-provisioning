@@ -9,6 +9,8 @@ import (
 
 	provisioningv1 "github.com/randyinthedev-hash/pqcota-common/gen/pqcota/provisioning/v1"
 	"github.com/randyinthedev-hash/pqcota-common/pkg/org"
+	"github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/history"
+	"github.com/randyinthedev-hash/pqcota-inventory/pkg/inventory/pgschema"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -58,7 +60,41 @@ func newPgRecordStore(ctx context.Context, dsn string, o org.ID) (*PgRecordStore
 	if err != nil {
 		return nil, err
 	}
-	if _, err := pool.Exec(ctx, recordSchemaSQL); err != nil {
+	if err := ensureRecordSchema(ctx, pool); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return &PgRecordStore{pool: pool, org: o}, nil
+}
+
+// RecordInitHint — 프로비저닝 기록 표가 없을 때 안내하는 명령.
+const RecordInitHint = "run `pqcota-records -init-schema` as the schema owner, or check search_path"
+
+// RecordSchema — 프로비저닝 기록 표. 초기화(`pqcota-records -init-schema`)와 확인이 같은 SQL을 쓴다.
+// 인벤토리 단계의 -init-schema가 맡지 않는다 — 인벤토리는 프로비저닝을 가져다 쓰지 않는다(의존 방향).
+func RecordSchema() pgschema.Part { return pgschema.NewPart("provisioning record", recordSchemaSQL) }
+
+// ensureRecordSchema — 이력과 같은 스위치(PQCOTA_AUTO_DDL)를 따른다. v0.15.0까지는 스위치와 상관없이 늘 DDL을 돌렸다.
+func ensureRecordSchema(ctx context.Context, pool *pgxpool.Pool) error {
+	if history.AutoDDL() {
+		_, err := pool.Exec(ctx, recordSchemaSQL)
+		return err
+	}
+	return pgschema.Check(ctx, pool, RecordSchema().Tables, history.AutoDDLEnv+"=0 turned automatic creation off — "+RecordInitHint)
+}
+
+// OpenPgRecordStoreIn — 조회용으로 연다. DDL을 돌리지 않고 표·열이 있고 읽을 수 있는지만 본다(PQCOTA_AUTO_DDL과 무관).
+// 표·열이 없으면 history.ErrSchemaMissing, 권한이 없으면 pgschema.ErrPermission.
+func OpenPgRecordStoreIn(ctx context.Context, dsn, organization string) (*PgRecordStore, error) {
+	o, err := org.Resolve(organization)
+	if err != nil {
+		return nil, err
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err := pgschema.Check(ctx, pool, RecordSchema().Tables, RecordInitHint); err != nil {
 		pool.Close()
 		return nil, err
 	}

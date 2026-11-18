@@ -160,13 +160,15 @@ PQCOTA_APPROVAL_KEYS=reviewer-1=<pub> pqcota-provision --level l2 plan.signed.js
 
 ```
 pqcota-records [node]
+pqcota-records -init-schema
 ```
 
 | 인자 | 하는 일 |
 |---|---|
 | `[node]` | 그 노드만 봅니다. 생략하면 전부입니다 |
+| `-init-schema` | 프로비저닝 기록 테이블을 한 트랜잭션으로 만들고 끝납니다. 노드 인자를 받지 않습니다. 처음 `pqcota-provision --dsn`을 실행하기 전과 판을 올릴 때마다 스키마 소유자로 실행합니다([데이터베이스 준비](https://github.com/randyinthedev-hash/pqcota-inventory/blob/main/cmd/README.ko.md#데이터베이스-준비)) |
 
-`env PQCOTA_DSN`이 필요합니다. `pqcota-provision --dsn`이 쓴 저장소를 읽습니다. id, 상태, 영향받는 앱, 변경 전에 캡처한 모듈, 스냅샷 참조를 나열합니다. **읽기 전용이며 상태를 바꾸지 않습니다.**
+`env PQCOTA_DSN`이 필요합니다. `pqcota-provision --dsn`이 쓴 저장소를 읽습니다. id, 상태, 영향받는 앱, 변경 전에 캡처한 모듈, 스냅샷 참조를 나열합니다. **읽기 전용이며 상태를 바꾸지 않습니다.** 테이블도 만들지 않습니다. 테이블이 없으면 `-init-schema`를 안내하고 종료 상태 1로 멈추며, 읽기 권한만 있는 계정으로도 실행됩니다.
 
 ## ④ 입력의 출처: 확정된 계획
 

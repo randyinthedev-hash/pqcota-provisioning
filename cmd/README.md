@@ -161,13 +161,15 @@ PQCOTA_APPROVAL_KEYS=reviewer-1=<pub> pqcota-provision --level l2 plan.signed.js
 
 ```
 pqcota-records [node]
+pqcota-records -init-schema
 ```
 
 | Argument | What it does |
 |---|---|
 | `[node]` | only that node. If omitted, all of them |
+| `-init-schema` | creates the provisioning-record table in one transaction and exits. It takes no node. Run it as the schema owner before the first `pqcota-provision --dsn`, and again after every upgrade ([setting up the database](https://github.com/randyinthedev-hash/pqcota-inventory/blob/main/cmd/README.md#setting-up-the-database)) |
 
-`env PQCOTA_DSN` is required: it reads the store that `pqcota-provision --dsn` wrote. It lists the id, status, affected apps, the modules captured before the change and the snapshot references. **It is read-only and changes no state.**
+`env PQCOTA_DSN` is required: it reads the store that `pqcota-provision --dsn` wrote. It lists the id, status, affected apps, the modules captured before the change and the snapshot references. **It is read-only and changes no state.** It does not create the table: if the table is missing it points to `-init-schema` and stops with status 1, and it runs with an account that can only read.
 
 ## ④ Where the input comes from: a finalized plan
 
